@@ -96,7 +96,7 @@ def ensure_marimo_running(mode: str = "edit") -> dict[str, Any]:
         "--headless",
         "--no-token",
     ]
-    creation_flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+    creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
     _marimo_proc = subprocess.Popen(
         cmd,
         cwd=str(ROOT_DIR),
