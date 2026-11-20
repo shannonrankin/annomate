@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Scientific Python Repo Review & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.2.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5.4.0
+        with:
+          python-version: "3.11"
+
+      - name: Install lint dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt ruff mypy "sp-repo-review[cli]" pytest
+
+      - name: Run Scientific Python repo-review
+        run: python -m repo_review .
+
+      - name: Run Ruff check
+        run: ruff check .
+
+      - name: Run MyPy check
+        run: mypy
+
+  tests:
+    name: Pytest Suite (Offline Demo Mode)
+    runs-on: ubuntu-latest
+    env:
+      ANNOMATE_DEMO_MODE: "true"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.2.2
+
+      - name: Set up Python & libsndfile
+        uses: actions/setup-python@v5.4.0
+        with:
+          python-version: "3.11"
+
+      - name: Install system audio library & package
+        run: |
+          sudo apt-get update && sudo apt-get install -y libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pytest httpx
+
+      - name: Run test suite
+        run: pytest

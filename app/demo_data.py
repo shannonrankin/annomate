@@ -8,13 +8,13 @@ bathymetry maps, playable synthetic call spectrograms, exports, and simulated co
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
 import random
 import re
-from typing import Any, Dict, List, Tuple
+from datetime import datetime, timedelta, timezone
+from typing import Any
 
 
-def generate_demo_annotations() -> List[Dict[str, Any]]:
+def generate_demo_annotations() -> list[dict[str, Any]]:
     """Generate 180 realistic multi-day, multi-site, multi-label bioacoustic annotations."""
     rng = random.Random(2026)
     base_dt = datetime(2009, 3, 28, 0, 12, 0, tzinfo=timezone.utc)
@@ -66,7 +66,7 @@ def generate_demo_annotations() -> List[Dict[str, Any]]:
     grans = ["EVENT_CALL", "EVENT_CALL", "EVENT_CALL", "EVENT_CALL", "EVENT_ENCOUNTER", "INTERVAL"]
     analysts = ["GDAVIS", "SRANKIN", "GDAVIS"]
 
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     cur_dt = base_dt
     for i in range(180):
         # Advance across ~6.5 days with realistic diel clustering around dusk/night/dawn
@@ -89,7 +89,7 @@ def generate_demo_annotations() -> List[Dict[str, Any]]:
         seg_st = cur_dt.replace(minute=(cur_dt.minute // 15) * 15, second=0, microsecond=0)
         seg_et = seg_st + timedelta(minutes=15)
         offset_s = round((cur_dt - seg_st).total_seconds(), 3)
-        fname = f"DEMO_{site['deployment_code'][:11]}_{seg_st.strftime('%Y%m%d_%H%M%S')}.aif"
+        fname = f"DEMO_{str(site['deployment_code'])[:11]}_{seg_st.strftime('%Y%m%d_%H%M%S')}.aif"
 
         rows.append(
             {
@@ -144,17 +144,17 @@ def generate_demo_annotations() -> List[Dict[str, Any]]:
     return rows
 
 
-_DEMO_ROWS_CACHE: List[Dict[str, Any]] = []
+_DEMO_ROWS_CACHE: list[dict[str, Any]] = []
 
 
-def get_demo_rows() -> List[Dict[str, Any]]:
+def get_demo_rows() -> list[dict[str, Any]]:
     global _DEMO_ROWS_CACHE
     if not _DEMO_ROWS_CACHE:
         _DEMO_ROWS_CACHE = generate_demo_annotations()
     return _DEMO_ROWS_CACHE
 
 
-def evaluate_demo_sql(sql: str, max_rows: int = 5000) -> Tuple[List[str], List[Dict[str, Any]]]:
+def evaluate_demo_sql(sql: str, max_rows: int = 5000) -> tuple[list[str], list[dict[str, Any]]]:
     """
     Filter & project the built-in 180-row Demo Dataset based on predicates in the generated SQL
     so interactive filtering, scope toggling, and random sampling work instantaneously offline.

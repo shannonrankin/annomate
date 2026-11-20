@@ -7,12 +7,24 @@ ENV/
 .env
 .env.local
 
-# Python cache
+# Python cache & build artifacts
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
+build/
+dist/
+*.egg-info/
+.eggs/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# R history
+.Rhistory
+.RData
 
 # Marimo session cache
 __marimo__/

@@ -22,18 +22,18 @@ into the authoritative `nmfs_annotation_db` (`core.annotations`) schema:
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
 import io
 import json
-from pathlib import Path
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
 from .db import get_connection, serialize_value
 
-PRESET_PROFILES: Dict[str, Dict[str, Any]] = {
+PRESET_PROFILES: dict[str, dict[str, Any]] = {
     "raven_pro": {
         "name": "Raven Pro Selection Table (.txt / TSV)",
         "description": "Cornell Lab Raven Pro 1.5 / 1.6 / 2.0 tab-delimited selection tables with file-relative offsets or Date/Time columns.",
@@ -113,7 +113,7 @@ PRESET_PROFILES: Dict[str, Dict[str, Any]] = {
     },
 }
 
-DEFAULT_LABEL_SYNONYMS: Dict[str, str] = {
+DEFAULT_LABEL_SYNONYMS: dict[str, str] = {
     "yes": "YES",
     "y": "YES",
     "1": "YES",
@@ -150,7 +150,7 @@ DEFAULT_LABEL_SYNONYMS: Dict[str, str] = {
     "auto": "UNVERIFIED",
 }
 
-DEFAULT_CALL_SYNONYMS: Dict[str, str] = {
+DEFAULT_CALL_SYNONYMS: dict[str, str] = {
     "upcall": "RW_UPCALL",
     "up-call": "RW_UPCALL",
     "rw_upcall": "RW_UPCALL",
@@ -167,7 +167,7 @@ DEFAULT_CALL_SYNONYMS: Dict[str, str] = {
     "cod grunt": "COD_GRUNT",
 }
 
-DEFAULT_GRANULARITY_SYNONYMS: Dict[str, str] = {
+DEFAULT_GRANULARITY_SYNONYMS: dict[str, str] = {
     "call": "EVENT_CALL",
     "event_call": "EVENT_CALL",
     "single call": "EVENT_CALL",
@@ -186,7 +186,7 @@ FILENAME_TS_PATTERNS = [
 ]
 
 
-def parse_uploaded_table(file_bytes: bytes, filename: str) -> Tuple[pd.DataFrame, str]:
+def parse_uploaded_table(file_bytes: bytes, filename: str) -> tuple[pd.DataFrame, str]:
     """Read uploaded Raven TSV, CSV, or Excel file into a clean DataFrame and detect preset."""
     lower_name = (filename or "upload.csv").lower()
     if lower_name.endswith((".xlsx", ".xls")):
@@ -213,7 +213,7 @@ def parse_uploaded_table(file_bytes: bytes, filename: str) -> Tuple[pd.DataFrame
     return df, detected
 
 
-def suggest_column_mapping(columns: List[str], preset: str) -> Dict[str, Optional[str]]:
+def suggest_column_mapping(columns: list[str], preset: str) -> dict[str, str | None]:
     """Auto-suggest mapping from uploaded columns to standardized fields."""
     profile = PRESET_PROFILES.get(preset, PRESET_PROFILES["custom_csv"])
     hints = profile["column_hints"]
@@ -238,7 +238,7 @@ def suggest_column_mapping(columns: List[str], preset: str) -> Dict[str, Optiona
         "confidence",
         "analyst",
     ]
-    mapping: Dict[str, Optional[str]] = {k: None for k in all_target_fields}
+    mapping: dict[str, str | None] = dict.fromkeys(all_target_fields)
     for field, candidates in hints.items():
         for cand in candidates:
             if cand.lower() in lower_lookup:
@@ -254,7 +254,7 @@ def suggest_column_mapping(columns: List[str], preset: str) -> Dict[str, Optiona
     return mapping
 
 
-def _infer_file_anchor_utc(filename: str) -> Optional[datetime]:
+def _infer_file_anchor_utc(filename: str) -> datetime | None:
     if not filename:
         return None
     for regex, two_digit_year in FILENAME_TS_PATTERNS:
@@ -278,7 +278,7 @@ def _infer_file_anchor_utc(filename: str) -> Optional[datetime]:
     return None
 
 
-def _parse_any_utc(val: Any) -> Optional[datetime]:
+def _parse_any_utc(val: Any) -> datetime | None:
     if val is None or (isinstance(val, float) and pd.isna(val)):
         return None
     s = str(val).strip()
@@ -294,21 +294,20 @@ def _parse_any_utc(val: Any) -> Optional[datetime]:
 
 
 def _lookup_db_file_anchors(
-    filenames: List[str],
-    recording_channel_id: Optional[Any] = None,
-) -> Dict[str, Dict[str, Any]]:
+    filenames: list[str],
+    recording_channel_id: Any | None = None,
+) -> dict[str, dict[str, Any]]:
     """Resolve uploaded source filenames against core.acoustic_files + core.audio_segments if connected."""
     clean_names = list({Path(str(f)).name for f in filenames if f and str(f).lower() != "nan"})
     if not clean_names:
         return {}
-    result: Dict[str, Dict[str, Any]] = {}
+    result: dict[str, dict[str, Any]] = {}
     try:
-        with get_connection(autocommit=True) as conn:
-            with conn.cursor() as cur:
-                cur.execute("SET statement_timeout = '4s'")
-                if recording_channel_id is not None and str(recording_channel_id).strip() != "":
-                    cur.execute(
-                        """
+        with get_connection(autocommit=True) as conn, conn.cursor() as cur:
+            cur.execute("SET statement_timeout = '4s'")
+            if recording_channel_id is not None and str(recording_channel_id).strip() != "":
+                cur.execute(
+                    """
                         SELECT af.name,
                                seg.recording_channel_id,
                                seg.file_channel,
@@ -320,11 +319,11 @@ def _lookup_db_file_anchors(
                           AND af.name = ANY(%s)
                         ORDER BY seg.subfile_index ASC
                         """,
-                        (int(float(recording_channel_id)), clean_names),
-                    )
-                else:
-                    cur.execute(
-                        """
+                    (int(float(recording_channel_id)), clean_names),
+                )
+            else:
+                cur.execute(
+                    """
                         SELECT af.name,
                                seg.recording_channel_id,
                                seg.file_channel,
@@ -337,14 +336,14 @@ def _lookup_db_file_anchors(
                         ORDER BY seg.subfile_index ASC
                         LIMIT 200
                         """,
-                        (clean_names,),
-                    )
-                for r in cur.fetchall():
-                    key = f"{r['name']}::{r['file_channel']}"
-                    if key not in result:
-                        result[key] = dict(r)
-                    if r["name"] not in result:
-                        result[r["name"]] = dict(r)
+                    (clean_names,),
+                )
+            for r in cur.fetchall():
+                key = f"{r['name']}::{r['file_channel']}"
+                if key not in result:
+                    result[key] = dict(r)
+                if r["name"] not in result:
+                    result[r["name"]] = dict(r)
     except Exception:
         pass
     return result
@@ -352,11 +351,11 @@ def _lookup_db_file_anchors(
 
 def align_and_validate_dataframe(
     df: pd.DataFrame,
-    mapping: Dict[str, Optional[str]],
-    defaults: Dict[str, Any],
-    vocab_maps: Optional[Dict[str, Dict[str, str]]] = None,
-    catalog: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    mapping: dict[str, str | None],
+    defaults: dict[str, Any],
+    vocab_maps: dict[str, dict[str, str]] | None = None,
+    catalog: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """
     Transform raw bioacoustic table rows into standardized `core.annotations` records
     and perform full pre-flight validation against DB schema & foreign-key constraints.
@@ -368,7 +367,7 @@ def align_and_validate_dataframe(
 
     valid_orgs = {o["code"] for o in (catalog or {}).get("organizations", [])}
     valid_calls = {c["code"] for c in (catalog or {}).get("call_types", [])}
-    valid_labels = {l["code"] for l in (catalog or {}).get("labels", [])} or {
+    valid_labels = {lbl["code"] for lbl in (catalog or {}).get("labels", [])} or {
         "YES", "NO", "MAYBE", "PROTOCOL_YES", "PROTOCOL_NO", "PROTOCOL_MAYBE", "UNVERIFIED"
     }
     valid_grans = {g["code"] for g in (catalog or {}).get("granularities", [])}
@@ -384,20 +383,20 @@ def align_and_validate_dataframe(
     file_list = df[source_file_col].dropna().astype(str).tolist() if source_file_col and source_file_col in df.columns else []
     db_file_anchors = _lookup_db_file_anchors(file_list, defaults.get("recording_channel_id"))
 
-    aligned_rows: List[Dict[str, Any]] = []
-    issue_summary: Dict[str, int] = {}
+    aligned_rows: list[dict[str, Any]] = []
+    issue_summary: dict[str, int] = {}
 
-    def record_issue(row_issues: List[str], msg: str):
+    def record_issue(row_issues: list[str], msg: str):
         row_issues.append(msg)
         issue_summary[msg] = issue_summary.get(msg, 0) + 1
 
     for idx, row in df.iterrows():
-        row_issues: List[str] = []
+        row_issues: list[str] = []
 
-        def get_col(field: str) -> Any:
+        def get_col(field: str, _row: Any = row) -> Any:
             col = mapping.get(field)
             if col and col in df.columns:
-                v = row[col]
+                v = _row[col]
                 if pd.isna(v):
                     return None
                 return v
@@ -419,7 +418,7 @@ def align_and_validate_dataframe(
         if rc_id_val is None and db_anchor and db_anchor.get("recording_channel_id"):
             rc_id_val = db_anchor["recording_channel_id"]
 
-        rc_id: Optional[int] = None
+        rc_id: int | None = None
         if rc_id_val is not None and str(rc_id_val).strip() != "":
             try:
                 rc_id = int(float(rc_id_val))
@@ -461,8 +460,8 @@ def align_and_validate_dataframe(
         # Frequency bounds
         fmin_raw = get_col("freq_min_hz")
         fmax_raw = get_col("freq_max_hz")
-        fmin_hz: Optional[float] = None
-        fmax_hz: Optional[float] = None
+        fmin_hz: float | None = None
+        fmax_hz: float | None = None
         if fmin_raw is not None and fmax_raw is not None:
             try:
                 scale = 1000.0 if freq_unit_khz else 1.0
@@ -564,9 +563,9 @@ def align_and_validate_dataframe(
 
 
 def commit_aligned_annotations(
-    aligned_rows: List[Dict[str, Any]],
-    new_procedure: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    aligned_rows: list[dict[str, Any]],
+    new_procedure: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """
     Transactionally insert (optional) `core.procedures` and standardized `core.annotations`
     into `nmfs_annotation_db` using granted DML permissions.
@@ -575,8 +574,8 @@ def commit_aligned_annotations(
     if not valid_rows:
         raise ValueError("No valid standardized rows to insert.")
 
-    inserted_ids: List[int] = []
-    created_procedure_id: Optional[int] = None
+    inserted_ids: list[int] = []
+    created_procedure_id: int | None = None
 
     with get_connection(autocommit=False) as conn:
         with conn.cursor() as cur:

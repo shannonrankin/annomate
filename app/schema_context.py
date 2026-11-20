@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from .config import get_settings
 
@@ -38,11 +38,11 @@ CRITICAL SCHEMA RULES:
 
 
 def build_structured_sql(
-    layers: List[str],
-    filters: Optional[Dict[str, Any]] = None,
+    layers: list[str],
+    filters: dict[str, Any] | None = None,
     limit: int = 500,
     random_sample: bool = False,
-) -> Tuple[str, str]:
+) -> tuple[str, str]:
     """
     Build a clean, well-formatted, GiST-index-friendly PostgreSQL query
     from selected relational layers and filter criteria.
@@ -51,7 +51,7 @@ def build_structured_sql(
     layer_set = set(layers or ["annotations"])
     layer_set.add("annotations")
 
-    select_cols: List[str] = [
+    select_cols: list[str] = [
         "a.id AS annotation_id",
         "a.organization_code",
         "a.call_type_code",
@@ -70,7 +70,7 @@ def build_structured_sql(
         "a.procedure_id",
     ]
 
-    joins: List[str] = []
+    joins: list[str] = []
     need_rc = bool({"makara", "audio", "reconcile"} & layer_set)
     need_rec = bool({"makara", "reconcile"} & layer_set)
 
@@ -158,8 +158,8 @@ def build_structured_sql(
             ]
         )
 
-    where_clauses: List[str] = []
-    explanation_parts: List[str] = []
+    where_clauses: list[str] = []
+    explanation_parts: list[str] = []
 
     def sql_lit(s: str) -> str:
         return "'" + str(s).replace("'", "''") + "'"
@@ -291,10 +291,10 @@ def build_structured_sql(
 
 def _parse_nl_heuristics(
     prompt_text: str,
-    selected_layers: List[str],
-    ui_filters: Optional[Dict[str, Any]] = None,
-    catalog: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    selected_layers: list[str],
+    ui_filters: dict[str, Any] | None = None,
+    catalog: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """
     Deterministic, schema-aware natural language parser for bioacoustic queries.
     Extracts layers, effort names, call types, labels, frequency bands, dates, and limits.
@@ -302,7 +302,7 @@ def _parse_nl_heuristics(
     text = (prompt_text or "").strip()
     lower = text.lower()
     merged_layers = list(dict.fromkeys(selected_layers or ["annotations"]))
-    filters: Dict[str, Any] = dict(ui_filters or {})
+    filters: dict[str, Any] = dict(ui_filters or {})
     limit = int(filters.pop("limit", 500) or 500)
     random_sample = bool(filters.pop("random_sample", False))
 
@@ -311,18 +311,14 @@ def _parse_nl_heuristics(
     if only_ann:
         merged_layers = ["annotations"]
     else:
-        if any(w in lower for w in ["gcs", "audio", "wav", "flac", "xwav", "uri", "path", "file", "segment", "spectrogram", "byte"]):
-            if "audio" not in merged_layers:
-                merged_layers.append("audio")
-        if any(w in lower for w in ["deploy", "lat", "lon", "coord", "depth", "site", "vessel", "cruise", "makara", "platform", "map"]):
-            if "makara" not in merged_layers:
-                merged_layers.append("makara")
-        if any(w in lower for w in ["effort", "study", "procedure", "protocol", "analysis", "dclde"]):
-            if "provenance" not in merged_layers:
-                merged_layers.append("provenance")
-        if any(w in lower for w in ["reconcil", "finding", "status", "integrity", "audit"]):
-            if "reconcile" not in merged_layers:
-                merged_layers.append("reconcile")
+        if "audio" not in merged_layers and any(w in lower for w in ["gcs", "audio", "wav", "flac", "xwav", "uri", "path", "file", "segment", "spectrogram", "byte"]):
+            merged_layers.append("audio")
+        if "makara" not in merged_layers and any(w in lower for w in ["deploy", "lat", "lon", "coord", "depth", "site", "vessel", "cruise", "makara", "platform", "map"]):
+            merged_layers.append("makara")
+        if "provenance" not in merged_layers and any(w in lower for w in ["effort", "study", "procedure", "protocol", "analysis", "dclde"]):
+            merged_layers.append("provenance")
+        if "reconcile" not in merged_layers and any(w in lower for w in ["reconcil", "finding", "status", "integrity", "audit"]):
+            merged_layers.append("reconcile")
 
     # Effort detection (e.g. DCLDE_2013 or catalog efforts)
     if not filters.get("effort_name"):
@@ -344,7 +340,7 @@ def _parse_nl_heuristics(
 
     # Label verification detection
     if not filters.get("label_codes"):
-        detected_labels: List[str] = []
+        detected_labels: list[str] = []
         if any(p in lower for p in ["verified positive", "positive", "confirmed", "label yes", "true call"]):
             detected_labels.append("YES")
         if any(p in lower for p in ["false positive", "negative", "rejected", "label no"]):
@@ -424,7 +420,7 @@ def _parse_nl_heuristics(
         filters["min_confidence"] = float(raw_c[:-1]) / 100.0 if raw_c.endswith("%") else float(raw_c)
 
     # Random sample & limit
-    if "random" in lower or "sample" in lower and "effort" not in lower:
+    if "random" in lower or ("sample" in lower and "effort" not in lower):
         random_sample = True
     lim_m = re.search(r"(?:limit|top|first|sample of|random)\s+(\d{1,5})\b", lower)
     if lim_m:
@@ -450,12 +446,12 @@ def _parse_nl_heuristics(
 
 def generate_sql_from_prompt(
     prompt_text: str = "",
-    selected_layers: Optional[List[str]] = None,
-    ui_filters: Optional[Dict[str, Any]] = None,
-    catalog: Optional[Dict[str, Any]] = None,
-    audio_bytes: Optional[bytes] = None,
+    selected_layers: list[str] | None = None,
+    ui_filters: dict[str, Any] | None = None,
+    catalog: dict[str, Any] | None = None,
+    audio_bytes: bytes | None = None,
     audio_mime: str = "audio/webm",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Convert user text and/or spoken voice audio into a PostgreSQL query against `nmfs_annotation_db`.
     Uses Gemini (`gemini-2.5-flash`) when `GEMINI_API_KEY` is configured, falling back seamlessly
@@ -488,7 +484,7 @@ def generate_sql_from_prompt(
                 f"User text prompt: {prompt_text or '(Listen to attached voice prompt and transcribe it into `transcript`)'}"
                 f"{catalog_context}"
             )
-            contents: List[Any] = [AUTHORITATIVE_SCHEMA_PROMPT, user_context]
+            contents: list[Any] = [AUTHORITATIVE_SCHEMA_PROMPT, user_context]
             if audio_bytes:
                 contents.append(types.Part.from_bytes(data=audio_bytes, mime_type=audio_mime))
 
@@ -500,7 +496,7 @@ def generate_sql_from_prompt(
                     temperature=0.1,
                 ),
             )
-            parsed = json.loads(resp.text)
+            parsed = json.loads(resp.text or "{}")
             if parsed.get("sql"):
                 return {
                     "transcript": parsed.get("transcript") or prompt_text,

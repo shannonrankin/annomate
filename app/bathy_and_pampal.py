@@ -16,9 +16,10 @@ from __future__ import annotations
 
 import base64
 import hashlib
-from pathlib import Path
+import shutil
 import subprocess
-from typing import Any, Dict, List, Optional, Tuple
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -31,22 +32,25 @@ PAMPAL_CACHE_DIR = CACHE_DIR / "pampal"
 BATHY_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 PAMPAL_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-_cached_rscript: Optional[str] = None
+_cached_rscript: str | None = None
 
 
-def find_rscript_with_pamscapes() -> Optional[str]:
-    """Locate an installed Rscript.exe that has PAMscapes / ggplot2 installed."""
+def find_rscript_with_pamscapes() -> str | None:
+    """Locate an installed Rscript executable that has PAMscapes / ggplot2 installed."""
     global _cached_rscript
-    if _cached_rscript is not None:
-        return _cached_rscript or None
+    if _cached_rscript:
+        return _cached_rscript
 
     r_root = Path(r"C:\Program Files\R")
-    candidates: List[Path] = []
+    candidates: list[Path] = []
     if r_root.exists():
         for d in sorted(r_root.iterdir(), reverse=True):
             exe = d / "bin" / "Rscript.exe"
             if exe.exists():
                 candidates.append(exe)
+    which_r = shutil.which("Rscript")
+    if which_r and Path(which_r) not in candidates:
+        candidates.append(Path(which_r))
 
     for exe in candidates:
         try:
@@ -54,19 +58,18 @@ def find_rscript_with_pamscapes() -> Optional[str]:
                 [str(exe), "-e", "cat(requireNamespace('PAMscapes', quietly=TRUE))"],
                 text=True,
                 stderr=subprocess.DEVNULL,
-                timeout=8,
+                timeout=25,
             ).strip()
-            if out == "TRUE":
+            if out.endswith("TRUE"):
                 _cached_rscript = str(exe)
                 return _cached_rscript
         except Exception:
             continue
 
-    _cached_rscript = ""
     return None
 
 
-def _procedural_shelf_bathy(lons: np.ndarray, lats: np.ndarray) -> np.ndarray:
+def _procedural_shelf_bathy(lons: np.ndarray[Any, Any], lats: np.ndarray[Any, Any]) -> np.ndarray[Any, Any]:
     """Fallback realistic bathymetry/topography grid (in meters) when offline."""
     lon_g, lat_g = np.meshgrid(lons, lats)
     # Approximate Northwest Atlantic / Cape Cod / Stellwagen Bank shelf & shoal geometry
@@ -86,7 +89,7 @@ def fetch_bathy_grid(
     lon_max: float,
     lat_min: float,
     lat_max: float,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, str]:
+) -> tuple[np.ndarray[Any, Any], np.ndarray[Any, Any], np.ndarray[Any, Any], str]:
     """
     Fetch (lons, lats, elevation_m, source_label) for the bounding box.
     Uses cached NOAA ETOPO 2022 via R `marmap::getNOAA.bathy` when available.
@@ -135,7 +138,7 @@ def fetch_bathy_grid(
     return lons, lats, z, "Regional Bathymetric/Topographic Relief"
 
 
-def _build_split_bathy_topo_colorscale(z_min: float, z_max: float) -> List[List[Any]]:
+def _build_split_bathy_topo_colorscale(z_min: float, z_max: float) -> list[list[Any]]:
     """
     Create a continuous Plotly colorscale where negative depths (< 0m) are rich oceanic
     bathymetric blues and positive elevations (>= 0m) transition sharply into terrestrial
@@ -159,7 +162,7 @@ def _build_split_bathy_topo_colorscale(z_min: float, z_max: float) -> List[List[
     ]
 
 
-def build_bathymetry_deployment_figure(subset_df: pd.DataFrame) -> Optional[go.Figure]:
+def build_bathymetry_deployment_figure(subset_df: pd.DataFrame) -> go.Figure | None:
     """
     Build an interactive Plotly Bathymetry + Topography map overlaid with high-contrast
     Solar Yellow (#FACC15) hydrophone deployment markers.
@@ -194,7 +197,7 @@ def build_bathymetry_deployment_figure(subset_df: pd.DataFrame) -> Optional[go.F
             colorscale=cscale,
             zmin=min(-200.0, z_min),
             zmax=max(50.0, z_max),
-            colorbar=dict(title="Elev (m)", thickness=12, len=0.82),
+            colorbar={"title": "Elev (m)", "thickness": 12, "len": 0.82},
             hovertemplate="Lon: %{x:.3f}°<br>Lat: %{y:.3f}°<br>Elevation/Depth: %{z:.0f} m<extra></extra>",
             name="Bathymetry/Topo",
         )
@@ -206,14 +209,14 @@ def build_bathymetry_deployment_figure(subset_df: pd.DataFrame) -> Optional[go.F
             x=lons,
             y=lats,
             z=z,
-            contours=dict(
-                coloring="none",
-                start=-400,
-                end=0,
-                size=50,
-                showlabels=False,
-            ),
-            line=dict(color="rgba(226, 232, 240, 0.24)", width=0.9),
+            contours={
+                "coloring": "none",
+                "start": -400,
+                "end": 0,
+                "size": 50,
+                "showlabels": False,
+            },
+            line={"color": "rgba(226, 232, 240, 0.24)", "width": 0.9},
             showscale=False,
             hoverinfo="skip",
         )
@@ -227,13 +230,13 @@ def build_bathymetry_deployment_figure(subset_df: pd.DataFrame) -> Optional[go.F
             mode="markers+text",
             text=sites["deployment_code"] if "deployment_code" in sites.columns else None,
             textposition="top center",
-            textfont=dict(color="#fef08a", size=11.5, family="JetBrains Mono, monospace"),
-            marker=dict(
-                size=16,
-                color="#facc15",
-                symbol="diamond",
-                line=dict(color="#07111f", width=2.4),
-            ),
+            textfont={"color": "#fef08a", "size": 11.5, "family": "JetBrains Mono, monospace"},
+            marker={
+                "size": 16,
+                "color": "#facc15",
+                "symbol": "diamond",
+                "line": {"color": "#07111f", "width": 2.4},
+            },
             customdata=sites["annotations"],
             hovertemplate=(
                 "<b>%{text}</b><br>"
@@ -248,22 +251,140 @@ def build_bathymetry_deployment_figure(subset_df: pd.DataFrame) -> Optional[go.F
         template="plotly_dark",
         paper_bgcolor="#0b192b",
         plot_bgcolor="#07111f",
-        font=dict(family="Plus Jakarta Sans, sans-serif", color="#e2e8f0", size=12),
+        font={"family": "Plus Jakarta Sans, sans-serif", "color": "#e2e8f0", "size": 12},
         height=330,
-        margin=dict(l=52, r=26, t=48, b=42),
+        margin={"l": 52, "r": 26, "t": 48, "b": 42},
         showlegend=False,
         title=f"Hydrophone Coordinates on {src_label}",
-        xaxis=dict(title="Longitude (°E)", range=[lon_min, lon_max], showgrid=False, zeroline=False),
-        yaxis=dict(
-            title="Latitude (°N)",
-            range=[lat_min, lat_max],
-            showgrid=False,
-            zeroline=False,
-            scaleanchor="x",
-            scaleratio=1.32,
-        ),
+        xaxis={"title": "Longitude (°E)", "range": [lon_min, lon_max], "showgrid": False, "zeroline": False},
+        yaxis={
+            "title": "Latitude (°N)",
+            "range": [lat_min, lat_max],
+            "showgrid": False,
+            "zeroline": False,
+            "scaleanchor": "x",
+            "scaleratio": 1.32,
+        },
     )
     return fig
+
+
+EXPLICIT_TZ_MAP: dict[str, tuple[int, str, str]] = {
+    "utc": (0, "UTC+00:00", "UTC · UTC+00:00 (Database Native)"),
+    "utc-5": (-5, "UTC-05:00 · EST", "US Eastern Standard · UTC-05:00 (NW/SE Atlantic)"),
+    "utc-6": (-6, "UTC-06:00 · CST", "US Central Standard · UTC-06:00 (Gulf of Mexico)"),
+    "utc-8": (-8, "UTC-08:00 · PST", "US Pacific Standard · UTC-08:00 (California Current)"),
+    "utc-9": (-9, "UTC-09:00 · AKST", "Alaska Standard · UTC-09:00 (North Pacific / Bering)"),
+    "utc-10": (-10, "UTC-10:00 · HST", "Hawaii Standard · UTC-10:00 (Hawaiian Islands)"),
+    "utc+10": (10, "UTC+10:00 · ChST", "Chamorro Standard · UTC+10:00 (Mariana Islands)"),
+}
+
+
+def infer_dataset_timezone(subset_df: pd.DataFrame) -> dict[str, Any]:
+    """
+    Infer the appropriate standard time zone for diel polar detection plots (`plotPolarDetections`)
+    from hydrophone coordinates (`latitude`, `longitude`) or NOAA Science Center (`organization_code`).
+    Uses fixed standard-time offsets (no DST jumps) per passive acoustic monitoring best practice,
+    and automatically falls back to UTC (`UTC+00:00`) when a dataset spans multiple ocean basins
+    (>25° longitude) or has no regional location metadata.
+    """
+    if subset_df is None or subset_df.empty:
+        return {
+            "offset_hours": 0,
+            "tz_short": "UTC+00:00",
+            "tz_label": "UTC · UTC+00:00 (Database Native)",
+            "source": "default_utc",
+        }
+
+    # 1. Coordinate-based regional hydrophone inference
+    if "longitude" in subset_df.columns:
+        lons = pd.to_numeric(subset_df["longitude"], errors="coerce").dropna()
+        lats = (
+            pd.to_numeric(subset_df["latitude"], errors="coerce").dropna()
+            if "latitude" in subset_df.columns
+            else pd.Series(dtype=float)
+        )
+        if not lons.empty:
+            lon_span = float(lons.max() - lons.min())
+            if lon_span > 25.0 and lon_span < 335.0:
+                return {
+                    "offset_hours": 0,
+                    "tz_short": "UTC+00:00",
+                    "tz_label": "UTC · UTC+00:00 (Multi-Basin Dataset)",
+                    "source": "multi_basin_utc",
+                }
+            med_lon = float(lons.median())
+            med_lat = float(lats.median()) if not lats.empty else 35.0
+
+            if -81.0 <= med_lon <= -64.0 and 24.0 <= med_lat <= 47.5:
+                off, short, lbl = EXPLICIT_TZ_MAP["utc-5"]
+                return {"offset_hours": off, "tz_short": short, "tz_label": lbl, "source": "coordinates"}
+            if -98.0 <= med_lon < -81.0 and 18.0 <= med_lat <= 31.5:
+                off, short, lbl = EXPLICIT_TZ_MAP["utc-6"]
+                return {"offset_hours": off, "tz_short": short, "tz_label": lbl, "source": "coordinates"}
+            if -132.0 <= med_lon <= -115.0 and 28.0 <= med_lat <= 49.5:
+                off, short, lbl = EXPLICIT_TZ_MAP["utc-8"]
+                return {"offset_hours": off, "tz_short": short, "tz_label": lbl, "source": "coordinates"}
+            if -172.0 <= med_lon < -130.0 and med_lat >= 50.0:
+                off, short, lbl = EXPLICIT_TZ_MAP["utc-9"]
+                return {"offset_hours": off, "tz_short": short, "tz_label": lbl, "source": "coordinates"}
+            if -168.0 <= med_lon <= -150.0 and 15.0 <= med_lat <= 29.0:
+                off, short, lbl = EXPLICIT_TZ_MAP["utc-10"]
+                return {"offset_hours": off, "tz_short": short, "tz_label": lbl, "source": "coordinates"}
+            if 140.0 <= med_lon <= 150.0 and 10.0 <= med_lat <= 22.0:
+                off, short, lbl = EXPLICIT_TZ_MAP["utc+10"]
+                return {"offset_hours": off, "tz_short": short, "tz_label": lbl, "source": "coordinates"}
+
+            solar_off = round(med_lon / 15.0)
+            if solar_off == 0:
+                return {
+                    "offset_hours": 0,
+                    "tz_short": "UTC+00:00",
+                    "tz_label": "UTC · UTC+00:00 (Prime Meridian Solar)",
+                    "source": "coordinates",
+                }
+            sign_str = f"UTC{solar_off:+03d}:00"
+            return {
+                "offset_hours": solar_off,
+                "tz_short": f"{sign_str} · Solar",
+                "tz_label": f"Site Local Solar Standard · {sign_str} ({med_lon:.1f}°E)",
+                "source": "coordinates",
+            }
+
+    # 2. Organization / deployment fallback when viewing Annotations-Only scope without lat/lon
+    org_tz_lookup = {
+        "NEFSC": "utc-5",
+        "SEFSC": "utc-5",
+        "SWFSC": "utc-8",
+        "NWFSC": "utc-8",
+        "AFSC": "utc-9",
+        "PIFSC": "utc-10",
+    }
+    if "organization_code" in subset_df.columns:
+        orgs = subset_df["organization_code"].dropna().astype(str).str.upper().unique()
+        mapped = {org_tz_lookup[o] for o in orgs if o in org_tz_lookup}
+        if len(mapped) == 1:
+            tz_key = next(iter(mapped))
+            off, short, lbl = EXPLICIT_TZ_MAP[tz_key]
+            return {"offset_hours": off, "tz_short": short, "tz_label": lbl, "source": "organization"}
+
+    return {
+        "offset_hours": 0,
+        "tz_short": "UTC+00:00",
+        "tz_label": "UTC · UTC+00:00 (Database Native)",
+        "source": "default_utc",
+    }
+
+
+def resolve_polar_timezone(subset_df: pd.DataFrame, polar_tz_mode: str = "auto") -> dict[str, Any]:
+    """Resolve user-selected or automatic time zone metadata for `plotPolarDetections`."""
+    mode = (polar_tz_mode or "auto").strip().lower()
+    if mode in ("auto", "dataset_local"):
+        return infer_dataset_timezone(subset_df)
+    if mode in EXPLICIT_TZ_MAP:
+        off, short, lbl = EXPLICIT_TZ_MAP[mode]
+        return {"offset_hours": off, "tz_short": short, "tz_label": lbl, "source": "explicit"}
+    return infer_dataset_timezone(subset_df)
 
 
 def render_pampal_pamscapes_suite(
@@ -271,7 +392,8 @@ def render_pampal_pamscapes_suite(
     box_bin: str = "hour/day",
     scene_bin: str = "auto",
     polar_bin: str = "detection/hour",
-) -> Dict[str, Any]:
+    polar_tz_mode: str = "auto",
+) -> dict[str, Any]:
     """
     Render `plotDetectionBoxplot`, `plotAcousticScene`, and `plotPolarDetections`
     using the installed R `PAMscapes` / `PAMpal` suite (with disk caching).
@@ -283,11 +405,22 @@ def render_pampal_pamscapes_suite(
     if not rscript:
         return {"ok": False, "error": "R with PAMscapes/PAMpal was not found on this machine."}
 
-    # Compute deterministic cache hash on relevant subset columns + bin parameters
+    polar_tz = resolve_polar_timezone(subset_df, polar_tz_mode)
+    tz_offset_hours = int(polar_tz["offset_hours"])
+    tz_offset_sec = tz_offset_hours * 3600
+    tz_short = polar_tz["tz_short"]
+    tz_label = polar_tz["tz_label"]
+    polar_x_label = (
+        f"Month of Year ({tz_short})"
+        if "month" in polar_bin.lower()
+        else f"Hour of Day ({tz_short})"
+    )
+
+    # Compute deterministic cache hash on relevant subset columns + bin + timezone parameters
     cols_keep = [c for c in ("start_time_utc", "end_time_utc", "call_type_code", "label_code", "deployment_code", "organization_code", "freq_min_hz", "freq_max_hz") if c in subset_df.columns]
     work_df = subset_df[cols_keep].copy()
 
-    sig_payload = work_df.to_csv(index=False) + f"|{box_bin}|{scene_bin}|{polar_bin}|v2"
+    sig_payload = work_df.to_csv(index=False) + f"|{box_bin}|{scene_bin}|{polar_bin}|{tz_offset_hours}|{tz_short}|v3"
     cache_id = hashlib.sha256(sig_payload.encode("utf-8")).hexdigest()[:16]
 
     box_png = PAMPAL_CACHE_DIR / f"{cache_id}_box.png"
@@ -317,6 +450,8 @@ def render_pampal_pamscapes_suite(
             eff_box_bin = "hour/day"
 
         date_fmt = "%b %d %H:%M" if span_days <= 3.0 else ("%b %d" if span_days <= 45.0 else "%b %Y")
+        safe_tz_label = tz_label.replace('"', "'")
+        safe_polar_x = polar_x_label.replace('"', "'")
 
         r_script_text = f"""
 suppressPackageStartupMessages({{
@@ -357,7 +492,7 @@ ann_dark_theme <- theme_minimal(base_size = 11.5) +
     panel.grid.minor = element_line(color = "#102136", linewidth = 0.2),
     text = element_text(color = "#e2e8f0"),
     plot.title = element_text(color = "#f8fafc", face = "bold", size = 13),
-    plot.subtitle = element_text(color = "#94a3b8", size = 10),
+    plot.subtitle = element_text(color = "#22d3ee", size = 9.5),
     axis.text = element_text(color = "#cbd5e1", size = 9.5),
     axis.title = element_text(color = "#94a3b8", size = 10.5),
     legend.background = element_rect(fill = "#0b192b", color = NA),
@@ -416,15 +551,24 @@ p_scene <- plotAcousticScene(
 
 ggsave("{scene_png.as_posix()}", p_scene, width = 6.2, height = 4.2, dpi = 160)
 
-# 3. plotPolarDetections
+# 3. plotPolarDetections (converted to dataset's resolved Standard Time Zone or UTC)
+det_polar <- det
+det_polar$UTC <- as.POSIXct(as.numeric(det$UTC) + ({tz_offset_sec}), origin = "1970-01-01", tz = "UTC")
+det_polar$end <- as.POSIXct(as.numeric(det$end) + ({tz_offset_sec}), origin = "1970-01-01", tz = "UTC")
+
 p_polar <- plotPolarDetections(
-  det,
+  det_polar,
   bin = "{polar_bin}",
   quantity = "count",
   group = c("species", "deployment"),
   title = "plotPolarDetections ({polar_bin})",
   verbose = FALSE
-) + ann_dark_theme
+) +
+  labs(
+    subtitle = "Time Zone: {safe_tz_label}",
+    x = "{safe_polar_x}"
+  ) +
+  ann_dark_theme
 
 ggsave("{polar_png.as_posix()}", p_polar, width = 6.2, height = 4.2, dpi = 160)
 """
@@ -433,8 +577,7 @@ ggsave("{polar_png.as_posix()}", p_polar, width = 6.2, height = 4.2, dpi = 160)
             subprocess.run(
                 [rscript, str(r_file)],
                 check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                capture_output=True,
                 text=True,
                 timeout=30,
             )
@@ -447,6 +590,8 @@ ggsave("{polar_png.as_posix()}", p_polar, width = 6.2, height = 4.2, dpi = 160)
     return {
         "ok": True,
         "rscript": Path(rscript).parent.parent.name,
+        "polar_tz_short": tz_short,
+        "polar_tz_label": tz_label,
         "boxplot_b64": base64.b64encode(box_png.read_bytes()).decode("ascii"),
         "scene_b64": base64.b64encode(scene_png.read_bytes()).decode("ascii"),
         "polar_b64": base64.b64encode(polar_png.read_bytes()).decode("ascii"),

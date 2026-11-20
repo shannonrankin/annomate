@@ -4,23 +4,24 @@ FastAPI Backend for Annomate — Bioacoustic Annotation Discovery, Review, Expor
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import contextlib
 import io
 import json
 import os
-from pathlib import Path
 import socket
 import subprocess
 import sys
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Annotated, Any
 
+import markdown as md_lib
+import pandas as pd
 from dotenv import set_key
 from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
-import markdown as md_lib
-import pandas as pd
 from pydantic import BaseModel
 
 from .aligner import (
@@ -31,7 +32,7 @@ from .aligner import (
     suggest_column_mapping,
 )
 from .audio_engine import compute_spectrogram_payload, get_gcs_client
-from .config import EXPORT_DIR, REVIEW_SESSION_DIR, ROOT_DIR, UPLOAD_DIR, get_settings
+from .config import REVIEW_SESSION_DIR, ROOT_DIR, get_settings
 from .db import (
     check_db_health,
     execute_readonly_query,
@@ -54,18 +55,13 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_Methods=["*"],
-    allow_headers=["*"],
-) if False else app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-_catalog_cache: Optional[Dict[str, Any]] = None
-_marimo_proc: Optional[subprocess.Popen] = None
-_uploaded_align_cache: Dict[str, pd.DataFrame] = {}
+_catalog_cache: dict[str, Any] | None = None
+_marimo_proc: subprocess.Popen[Any] | None = None
+_uploaded_align_cache: dict[str, pd.DataFrame] = {}
 
 
 def _is_port_open(host: str, port: int) -> bool:
@@ -74,7 +70,7 @@ def _is_port_open(host: str, port: int) -> bool:
         return s.connect_ex((host, port)) == 0
 
 
-def ensure_marimo_running(mode: str = "edit") -> Dict[str, Any]:
+def ensure_marimo_running(mode: str = "edit") -> dict[str, Any]:
     """Ensure the reactive Marimo Review Studio server is running and reachable."""
     global _marimo_proc
     settings = get_settings()
@@ -123,8 +119,8 @@ def ensure_marimo_running(mode: str = "edit") -> Dict[str, Any]:
 # Pydantic Request Models
 # ---------------------------------------------------------------------------
 class SettingsUpdateRequest(BaseModel):
-    gemini_api_key: Optional[str] = None
-    gcp_project: Optional[str] = None
+    gemini_api_key: str | None = None
+    gcp_project: str | None = None
 
 
 class DemoModeRequest(BaseModel):
@@ -133,20 +129,20 @@ class DemoModeRequest(BaseModel):
 
 class ExecuteSqlRequest(BaseModel):
     sql: str
-    prompt_summary: Optional[str] = ""
+    prompt_summary: str | None = ""
     max_rows: int = 2500
 
 
 class StageReviewRequest(BaseModel):
     use_last_query: bool = True
-    sql: Optional[str] = None
-    prompt_summary: Optional[str] = ""
+    sql: str | None = None
+    prompt_summary: str | None = ""
     marimo_mode: str = "edit"
 
 
 class SpectrogramRequest(BaseModel):
-    annotation_id: Optional[int] = None
-    row_meta: Optional[Dict[str, Any]] = None
+    annotation_id: int | None = None
+    row_meta: dict[str, Any] | None = None
     nfft: int = 256
     overlap_pct: float = 85.0
     window_type: str = "hann"
@@ -158,7 +154,7 @@ class SpectrogramRequest(BaseModel):
 
 class ExportBuildRequest(BaseModel):
     source: str = "last_query"  # "last_query" | "marimo_reviewed" | "effort"
-    effort_name: Optional[str] = "DCLDE_2013"
+    effort_name: str | None = "DCLDE_2013"
     limit: int = 5000
     enrich_makara_deployment: bool = True
     enrich_makara_recording: bool = True
@@ -170,17 +166,17 @@ class ExportBuildRequest(BaseModel):
 
 class AlignValidateRequest(BaseModel):
     session_id: str
-    mapping: Dict[str, Optional[str]]
-    defaults: Dict[str, Any]
-    vocab_maps: Optional[Dict[str, Dict[str, str]]] = None
+    mapping: dict[str, str | None]
+    defaults: dict[str, Any]
+    vocab_maps: dict[str, dict[str, str]] | None = None
 
 
 class AlignCommitRequest(BaseModel):
     session_id: str
-    mapping: Dict[str, Optional[str]]
-    defaults: Dict[str, Any]
-    vocab_maps: Optional[Dict[str, Dict[str, str]]] = None
-    new_procedure: Optional[Dict[str, Any]] = None
+    mapping: dict[str, str | None]
+    defaults: dict[str, Any]
+    vocab_maps: dict[str, dict[str, str]] | None = None
+    new_procedure: dict[str, Any] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -196,17 +192,13 @@ def api_status():
 
     last_q_meta = {}
     if (REVIEW_SESSION_DIR / "last_query_meta.json").exists():
-        try:
+        with contextlib.suppress(Exception):
             last_q_meta = json.loads((REVIEW_SESSION_DIR / "last_query_meta.json").read_text(encoding="utf-8"))
-        except Exception:
-            pass
 
     reviewed_meta = {}
     if (REVIEW_SESSION_DIR / "reviewed_meta.json").exists():
-        try:
+        with contextlib.suppress(Exception):
             reviewed_meta = json.loads((REVIEW_SESSION_DIR / "reviewed_meta.json").read_text(encoding="utf-8"))
-        except Exception:
-            pass
 
     return {
         "demo_mode": demo_active,
@@ -259,10 +251,10 @@ def api_catalog(refresh: bool = Query(False)):
 # ---------------------------------------------------------------------------
 @app.post("/api/query/nl-to-sql")
 async def api_nl_to_sql(
-    prompt_text: str = Form(""),
-    layers_json: str = Form('["annotations", "makara", "audio"]'),
-    filters_json: str = Form("{}"),
-    audio_file: Optional[UploadFile] = File(None),
+    prompt_text: Annotated[str, Form()] = "",
+    layers_json: Annotated[str, Form()] = '["annotations", "makara", "audio"]',
+    filters_json: Annotated[str, Form()] = "{}",
+    audio_file: Annotated[UploadFile | None, File()] = None,
 ):
     global _catalog_cache
     if _catalog_cache is None:
@@ -278,7 +270,7 @@ async def api_nl_to_sql(
     except Exception:
         ui_filters = {}
 
-    audio_bytes: Optional[bytes] = None
+    audio_bytes: bytes | None = None
     audio_mime = "audio/webm"
     if audio_file is not None:
         audio_bytes = await audio_file.read()
@@ -306,7 +298,7 @@ def api_execute_query(req: ExecuteSqlRequest):
     df.to_csv(csv_path, index=False)
 
     # Compute rich dataset summary for the post-query decision card
-    summary: Dict[str, Any] = {
+    summary: dict[str, Any] = {
         "row_count": len(df),
         "column_count": len(df.columns),
         "truncated": res["truncated"],
@@ -343,10 +335,10 @@ def api_download_query_csv():
     if not csv_path.exists():
         raise HTTPException(status_code=404, detail="No query results cached yet. Run a query first.")
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    return StreamingResponse(
-        open(csv_path, "rb"),
+    return FileResponse(
+        csv_path,
         media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="annomate_query_{ts}.csv"'},
+        filename=f"annomate_query_{ts}.csv",
     )
 
 
@@ -367,7 +359,8 @@ def api_stage_review(req: StageReviewRequest):
         row_count = len(df)
     elif req.use_last_query and last_csv.exists():
         active_csv.write_bytes(last_csv.read_bytes())
-        row_count = sum(1 for _ in open(active_csv, "rb")) - 1
+        with active_csv.open("rb") as f:
+            row_count = sum(1 for _ in f) - 1
     else:
         sql_q, _ = build_structured_sql(
             layers=["annotations", "provenance", "makara", "audio"],
@@ -396,7 +389,7 @@ def api_stage_review(req: StageReviewRequest):
 
 @app.post("/api/spectrogram")
 def api_spectrogram(req: SpectrogramRequest):
-    meta: Dict[str, Any] = dict(req.row_meta or {})
+    meta: dict[str, Any] = dict(req.row_meta or {})
     if req.annotation_id is not None:
         db_ctx = fetch_annotation_audio_context(req.annotation_id)
         if db_ctx:
@@ -535,11 +528,10 @@ def _enrich_dataframe_for_export(df: pd.DataFrame, req: ExportBuildRequest) -> p
     )
 
     try:
-        with get_connection(autocommit=True) as conn:
-            with conn.cursor() as cur:
-                cur.execute("SET statement_timeout = '15s'")
-                cur.execute(enrich_sql, (ann_ids,))
-                enrich_rows = [{k: serialize_value(v) for k, v in dict(r).items()} for r in cur.fetchall()]
+        with get_connection(autocommit=True) as conn, conn.cursor() as cur:
+            cur.execute("SET statement_timeout = '15s'")
+            cur.execute(enrich_sql, (ann_ids,))
+            enrich_rows = [{k: serialize_value(v) for k, v in dict(r).items()} for r in cur.fetchall()]
         if enrich_rows:
             edf = pd.DataFrame(enrich_rows)
             new_cols = ["annotation_id"] + [c for c in edf.columns if c not in df.columns and c != "annotation_id"]
@@ -695,12 +687,15 @@ def api_align_load_sample(preset_id: str):
 
 
 @app.post("/api/align/upload")
-async def api_align_upload(file: UploadFile = File(...), preset_override: Optional[str] = Form(None)):
+async def api_align_upload(
+    file: Annotated[UploadFile, File(...)],
+    preset_override: Annotated[str | None, Form()] = None,
+):
     raw_bytes = await file.read()
     try:
         df, detected = parse_uploaded_table(raw_bytes, file.filename or "annotations.csv")
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Could not parse annotation file: {exc}")
+        raise HTTPException(status_code=400, detail=f"Could not parse annotation file: {exc}") from exc
 
     preset = preset_override if preset_override in PRESET_PROFILES else detected
     session_id = f"upload_{datetime.now(timezone.utc).strftime('%H%M%S_%f')}"
@@ -810,7 +805,7 @@ def api_align_commit(req: AlignCommitRequest):
             _catalog_cache = fetch_reference_catalog()
         return {"ok": True, **commit_res}
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Database transaction rolled back: {exc}")
+        raise HTTPException(status_code=400, detail=f"Database transaction rolled back: {exc}") from exc
 
 
 # ---------------------------------------------------------------------------

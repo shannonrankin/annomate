@@ -38,7 +38,7 @@ Four dark-themed interactive Plotly charts summarize your active subset:
 Directly beneath the interactive charts, Annomate executes your local R **`PAMscapes` / `PAMpal`** installation (NOAA SWFSC FOSSA suite) to render three publication-ready acoustic plots with adjustable temporal bins:
 - **`plotDetectionBoxplot`** (e.g., `hour/day`, `hour/week`, `day/week`, `day/month`)
 - **`plotAcousticScene`** (auto-scaled or `15min` / `1hour` / `1day` presence across each call type's frequency band)
-- **`plotPolarDetections`** (circular 24-hour diel or 12-month seasonal detection rose plot)
+- **`plotPolarDetections`** (circular 24-hour diel or 12-month seasonal detection rose plot, with automatic **hydrophone site Standard Time Zone** inference—such as `UTC-05:00 · EST` for NW Atlantic deployments or `UTC+00:00` for multi-basin/global datasets—plus a **Polar Plot Time Zone** selector to switch between local site standard time and `UTC` at any time)
 
 ---
 

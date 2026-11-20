@@ -26,7 +26,10 @@ Welcome to **annomate**—your bioacoustic annotation discovery, review, standar
 
 ## 2. Launching Annomate
 
-- **No Command Line Needed (Windows Explorer):** Double-click **`Start_Annomate.bat`** (for Live Mode) or **`Start_Annomate_Demo.bat`** (for 100% offline Demo Mode).
+> **First Time Getting Annomate from GitHub?**  
+> Clicking a `.bat` file on the GitHub webpage only previews its text in your browser. First **download (`<> Code` → `Download ZIP` → `Extract All...`) or `git clone` the repository onto your computer**, then double-click the launcher inside your local `annomate` folder. *(Alternatively, for an instant browser-only Demo Mode preview on GitHub without downloading locally, click **`<> Code` → `Codespaces` → `Create codespace on main`**.)*
+
+- **No Command Line Needed (Windows Explorer):** Inside your local `annomate` folder, double-click **`Start_Annomate.bat`** (for Live Mode) or **`Start_Annomate_Demo.bat`** (for 100% offline Demo Mode).
 - **PowerShell:** Run `.\run_annomate.ps1` in `c:\Users\shannon.rankin\Documents\GitHub\annomate`.
 
 Then open your browser to:

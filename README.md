@@ -8,20 +8,48 @@
 
 **annomate** helps passive acoustic monitoring (PAM) scientists and analysts **find**, **review**, **export**, and **standardize** acoustic call annotations—connecting detections in NOAA NMFS's `nmfs_annotation_db` directly to authoritative **Makara** deployment metadata and original audio recordings in **Google Cloud Storage (`gs://`)**.
 
+> **Code Quality & Packaging Standards:** This package aligns with the [**Scientific Python Development Guide (`scientific-python/cookie`)**](https://github.com/scientific-python/cookie) and passes 100% of automated checks in [**`sp-repo-review`**](https://pypi.org/project/sp-repo-review/), [**Ruff**](https://docs.astral.sh/ruff/), [**MyPy**](https://mypy-lang.org/), and [**Pytest**](https://docs.pytest.org/).
+
 <br clear="left"/>
 
 ---
 
 ## How to Start Annomate (No Command Line Experience Needed!)
 
-You do **not** need to know how to use a terminal or command line to run **annomate**—and you can start in **Offline Demo Mode** right away even if you do not have NOAA VPN or Google Cloud access yet!
+You do **not** need to know how to use a terminal or command line to run **annomate**! Choose whichever path fits you best:
 
-### Trying It Out First? Use Offline Demo Mode (Zero VPN or Cloud Setup!)
-If you are giving a live presentation, working on a plane/ship without internet, or haven't set up your NOAA VPN / Google Cloud credentials yet:
-- **Option A — Double-click `Start_Annomate_Demo.bat`** in the `annomate` folder in Windows File Explorer. Your browser opens straight into **Demo Mode** with a built-in multi-day catalog of **180 bioacoustic calls across 3 hydrophone sites**, interactive filtering, bathymetry & `PAMpal` plots, **playable synthesized call audio**, exports, and safe simulated database commits!
-- **Option B — Toggle Anytime Inside the App:** Even if you launched normally, you can click the **`Demo Mode: OFF / ON`** pill in the top header bar at any time to switch between Live Cloud Mode and Offline Demo Mode with one click:
+1. **Recommended — Run Locally on Your Computer (Supports BOTH Offline Demo Mode & Live NOAA VPN Mode):** Download or clone the repository onto your computer once, then double-click `Start_Annomate_Demo.bat` or `Start_Annomate.bat`. *(Note: Clicking a `.bat` file directly on the GitHub webpage only previews its text in your browser—you must download or clone the full `annomate` folder to your computer first!)*
+2. **Zero-Download Browser Preview — GitHub Codespaces (Offline Demo Mode Only):** Run the interactive demo directly inside your web browser from GitHub without downloading anything locally.
+
+---
+
+### First Step for Local Use: Download or Clone the Repository to Your Computer
+Before you can double-click `Start_Annomate_Demo.bat` or `Start_Annomate.bat`, get a copy of the `annomate` folder onto your computer using **any one** of these three options:
+
+- **Easiest (Zero Command Line — Download ZIP from GitHub):**
+  1. At the top of this GitHub repository page, click the green **`<> Code`** button, then click **`Download ZIP`**.
+  2. Open your **`Downloads`** folder in Windows File Explorer, **right-click** `annomate-main.zip`, and click **`Extract All...`** → **`Extract`** *(for example, into your `Documents` folder)*.
+  3. Open the extracted **`annomate`** folder—you will see [Start_Annomate_Demo.bat](Start_Annomate_Demo.bat) and [Start_Annomate.bat](Start_Annomate.bat) ready to double-click!
+- **Using GitHub Desktop:** Click the green **`<> Code`** button → **`Open with GitHub Desktop`** → **`Clone`**.
+- **Using Git in a Terminal:** `git clone <YOUR-GITHUB-REPO-URL>`
+
+---
+
+### Trying It Out Without VPN or GCP? Two Zero-Setup Demo Options
+
+#### Option 1 — Local Double-Click Demo (After Downloading/Cloning Above)
+- Open your local **`annomate`** folder in Windows File Explorer and double-click **[Start_Annomate_Demo.bat](Start_Annomate_Demo.bat)**.
+- Your browser opens straight into **Offline Demo Mode** at `http://127.0.0.1:8000` with a built-in multi-day catalog of **180 bioacoustic calls across 3 hydrophone sites**, interactive SQL filtering, bathymetry & `PAMpal` plots, **playable synthesized call audio**, exports, and safe simulated database commits!
+- **Toggle Anytime Inside the App:** Even if you launched normally via `Start_Annomate.bat`, you can click the **`Demo Mode: OFF / ON`** pill in the top header bar at any time to switch between Live Cloud Mode and Offline Demo Mode with one click:
 
 ![Annomate Offline Demo Mode Header Bar](docs/images/00_demo_mode_header.png)
+
+#### Option 2 — Run Directly in Your Browser from GitHub (GitHub Codespaces — No Local Download!)
+If someone wants to test **Offline Demo Mode** right from the GitHub website without downloading or installing Python locally:
+1. At the top of the GitHub repository page, click the green **`<> Code`** button.
+2. Switch to the **`Codespaces`** tab and click **`Create codespace on main`**.
+3. Wait ~60 seconds while GitHub builds the cloud container in your browser—it automatically sets `ANNOMATE_DEMO_MODE=true`, starts **annomate** on port `8000`, and pops up an **`Open in Browser`** button!
+   *(Note: Because GitHub Codespaces runs on GitHub's cloud rather than NOAA's internal VPN, Codespaces is for **Offline Demo Mode** only. To connect to live `nmfs_annotation_db` over NOAA VPN or render local R `PAMpal` plots, download/clone the repository locally using the steps above.)*
 
 ---
 
@@ -96,7 +124,7 @@ Clicking **Review in Marimo Notebook →** (or opening Tab `02 · Review Data`) 
 
 ![02a Marimo Review Studio Subsetting and NOAA ETOPO Bathymetry Map](docs/images/04a_marimo_overview_and_bathy.png)
 
-- **Authentic R `PAMpal` / `PAMscapes` Plots:** Automatically renders `plotDetectionBoxplot`, `plotAcousticScene`, and `plotPolarDetections` when R (`PAMscapes` / `PAMpal`) is installed locally.
+- **Authentic R `PAMpal` / `PAMscapes` Plots:** Automatically renders `plotDetectionBoxplot`, `plotAcousticScene`, and `plotPolarDetections` when R (`PAMscapes` / `PAMpal`) is installed locally—including automatic **hydrophone site Standard Time Zone** detection (`UTC-05:00 · EST`, `UTC-08:00 · PST`, or `UTC+00:00`) and a **Polar Plot Time Zone** selector right above the plots.
 - **Embedded Call Spectrogram, Audio Player & Data Chatbot:** Pick any call (or select **`★ SYNTHETIC REFERENCE CALL`** at the top of the dropdown), adjust `NFFT`, `Overlap %`, `Window`, `Padding`, `Max Hz`, `Dynamic Range`, and `Colormap`, press **Play (`▶`)** to listen to the call streamed directly from Google Cloud Storage, and ask questions in the **Bioacoustics Data Explorer Chatbot** at the bottom:
 
 ![02b Marimo Review Studio PAMpal Plots and Embedded Cloud Spectrogram](docs/images/04b_marimo_pampal_and_spectrogram.png)
@@ -141,9 +169,11 @@ When Annomate is running, click **`Docs & Component Guides ↗`** in the top bar
 
 ---
 
-## For Command-Line / Developer Users *(Optional)*
+## Scientific Python Standards & Developer Commands *(Optional)*
 
-If you prefer launching from PowerShell, Positron, or VS Code instead of double-clicking `Start_Annomate.bat`:
+**annomate** is structured and maintained in accordance with the [**Scientific Python Development Guide (`scientific-python/cookie`)**](https://github.com/scientific-python/cookie) and verified with [**`sp-repo-review`**](https://pypi.org/project/sp-repo-review/) (`pyproject.toml` PEP 621 / PEP 735 dependency groups, `hatchling` build backend, strict `pytest` & `mypy` configurations, `ruff` linting/formatting, `.pre-commit-config.yaml`, `noxfile.py` task sessions, and Dependabot-maintained GitHub Actions CI with `zizmor` security checks).
+
+If you prefer launching or running checks from PowerShell, Positron, or VS Code instead of double-clicking `Start_Annomate.bat`:
 
 ```powershell
 # Start Annomate Web App (http://127.0.0.1:8000) and auto-open browser:
@@ -152,6 +182,11 @@ If you prefer launching from PowerShell, Positron, or VS Code instead of double-
 # Open the Marimo Review Notebook in full Python code-edit mode:
 .\.venv\Scripts\python.exe -m marimo edit .\notebooks\review_studio.py --port 2718
 
-# Run the automated test suite:
-.\.venv\Scripts\python.exe -m unittest discover -s .\tests -v
+# Run the full Pytest automated test suite:
+.\.venv\Scripts\pytest.exe -v
+
+# Verify Scientific Python guide alignment, linting, and static types:
+.\.venv\Scripts\python.exe -m repo_review .
+.\.venv\Scripts\ruff.exe check .
+.\.venv\Scripts\mypy.exe
 ```

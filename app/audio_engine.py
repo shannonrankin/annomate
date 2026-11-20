@@ -21,11 +21,11 @@ import time
 import wave
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 import numpy as np
-from scipy import signal
 import soundfile as sf
+from scipy import signal
 
 from .config import CACHE_DIR, get_settings
 from .db import is_demo_mode_active
@@ -33,12 +33,12 @@ from .db import is_demo_mode_active
 GCS_AUDIO_CACHE = CACHE_DIR / "gcs_audio"
 GCS_AUDIO_CACHE.mkdir(parents=True, exist_ok=True)
 
-_gcs_client = None
+_gcs_client: Any = None
 _gcs_client_ts: float = 0.0
-_gcs_error: Optional[str] = None
+_gcs_error: str | None = None
 
 
-def get_gcs_client(force_refresh: bool = False):
+def get_gcs_client(force_refresh: bool = False) -> Any:
     """
     Initialize Google Cloud Storage client using either:
     1. Standard Application Default Credentials (`gcloud auth application-default login`), or
@@ -96,7 +96,7 @@ def get_gcs_client(force_refresh: bool = False):
         return None
 
 
-def parse_gs_uri(gs_uri: str) -> Tuple[str, str]:
+def parse_gs_uri(gs_uri: str) -> tuple[str, str]:
     if not gs_uri or not gs_uri.startswith("gs://"):
         raise ValueError(f"Invalid GCS URI: {gs_uri}")
     without_scheme = gs_uri[5:]
@@ -112,7 +112,7 @@ def _decode_pcm_bytes(
     num_channels: int,
     target_channel: int,
     big_endian: bool = False,
-) -> np.ndarray:
+) -> np.ndarray[Any, Any]:
     """Decode raw little-endian (WAV/XWAV) or big-endian (AIFF/AIF) PCM bytes into float32 mono array."""
     num_channels = max(1, int(num_channels or 1))
     target_channel = min(max(0, int(target_channel or 0)), num_channels - 1)
@@ -170,7 +170,7 @@ def _inspect_magic_bytes(path: Path) -> str:
     return "unknown"
 
 
-def _parse_iso_utc(val: Any) -> Optional[datetime]:
+def _parse_iso_utc(val: Any) -> datetime | None:
     if val is None:
         return None
     if isinstance(val, datetime):
@@ -195,14 +195,14 @@ def synthesize_bioacoustic_call(
     freq_min_hz: float,
     freq_max_hz: float,
     seed: int = 42,
-) -> np.ndarray:
+) -> np.ndarray[Any, Any]:
     """
     Generate a realistic synthetic bioacoustic call (FM sweep + subtle harmonics + ocean ambient pink noise)
     ONLY used as an explicitly badged preview fallback when GCS audio is unreachable.
     """
     rng = np.random.default_rng(seed)
     sr = float(sample_rate_hz or 2000.0)
-    n_samples = max(256, int(round(total_duration_s * sr)))
+    n_samples = max(256, round(total_duration_s * sr))
     t = np.arange(n_samples, dtype=np.float32) / sr
 
     # Ambient 1/f ocean background noise
@@ -238,7 +238,7 @@ def synthesize_bioacoustic_call(
     return ambient
 
 
-def encode_wav_base64(samples: np.ndarray, sample_rate_hz: float, normalize: bool = True) -> str:
+def encode_wav_base64(samples: np.ndarray[Any, Any], sample_rate_hz: float, normalize: bool = True) -> str:
     """
     Encode mono float32 samples into a standard 16-bit PCM WAV data URI payload.
     Automatically upsamples low-sample-rate PAM streams (e.g., 2,000 Hz MARU recordings)
@@ -248,10 +248,10 @@ def encode_wav_base64(samples: np.ndarray, sample_rate_hz: float, normalize: boo
     arr = np.nan_to_num(np.asarray(samples, dtype=np.float32), nan=0.0, posinf=0.0, neginf=0.0)
     if arr.size == 0:
         arr = np.zeros(256, dtype=np.float32)
-    sr_in = max(200, int(round(sample_rate_hz or 2000.0)))
+    sr_in = max(200, round(sample_rate_hz or 2000.0))
     sr_out = sr_in
     if sr_in < 8000:
-        up_factor = int(math.ceil(8000.0 / sr_in))
+        up_factor = math.ceil(8000.0 / sr_in)
         arr = signal.resample_poly(arr, up=up_factor, down=1).astype(np.float32)
         sr_out = sr_in * up_factor
 
@@ -271,9 +271,9 @@ def encode_wav_base64(samples: np.ndarray, sample_rate_hz: float, normalize: boo
 
 
 def fetch_audio_window(
-    meta: Dict[str, Any],
+    meta: dict[str, Any],
     padding_sec: float = 2.5,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Retrieve the audio waveform surrounding an annotation.
 
@@ -326,10 +326,10 @@ def fetch_audio_window(
         call_offset_in_window = padding_sec
 
     win_duration_s = max(0.25, min(60.0, win_rel_end - win_rel_start))
-    start_frame = max(0, int(round(win_rel_start * sr)))
-    n_frames = max(128, int(round(win_duration_s * sr)))
+    start_frame = max(0, round(win_rel_start * sr))
+    n_frames = max(128, round(win_duration_s * sr))
 
-    gcs_attempt_error: Optional[str] = None
+    gcs_attempt_error: str | None = None
     is_demo_row = is_demo_mode_active() or gs_uri.startswith("gs://demo-noaa-pam/") or bool(meta.get("demo_synthetic_playable"))
 
     if is_demo_row:
@@ -418,7 +418,7 @@ def fetch_audio_window(
                 with sf.SoundFile(str(local_path), mode="r") as snd:
                     actual_sr = float(snd.samplerate) if fmt not in ("xwav", "x.wav", "xflac", "x.flac") else float(sr or snd.samplerate)
                     n_ch = snd.channels
-                    seek_frame = int(round(win_rel_start * actual_sr))
+                    seek_frame = round(win_rel_start * actual_sr)
 
                     # Handle multi-subfile .x.flac sample addressing per Triton xwav_read spec
                     if kind == "flac" and data_byte_offset is not None and first_seg_byte_offset is not None:
@@ -427,7 +427,7 @@ def fetch_audio_window(
                         seek_frame += subfile_sample_offset
 
                     seek_frame = min(max(0, seek_frame), max(0, snd.frames - 1))
-                    read_frames = min(int(round(win_duration_s * actual_sr)), snd.frames - seek_frame)
+                    read_frames = min(round(win_duration_s * actual_sr), snd.frames - seek_frame)
                     snd.seek(seek_frame)
                     data = snd.read(read_frames, dtype="float32", always_2d=True)
                     ch_idx = min(max(0, file_channel), n_ch - 1)
@@ -482,27 +482,27 @@ def fetch_audio_window(
 
 
 def compute_spectrogram_payload(
-    meta: Dict[str, Any],
+    meta: dict[str, Any],
     nfft: int = 256,
     overlap_pct: float = 85.0,
     window_type: str = "hann",
-    fmin_hz: Optional[float] = None,
-    fmax_hz: Optional[float] = None,
+    fmin_hz: float | None = None,
+    fmax_hz: float | None = None,
     padding_sec: float = 2.5,
     db_range: float = 55.0,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Fetch audio window and compute a high-resolution STFT spectrogram + base64 WAV audio.
     """
     audio_info = fetch_audio_window(meta, padding_sec=padding_sec)
-    samples: np.ndarray = audio_info["samples"]
+    samples: np.ndarray[Any, Any] = audio_info["samples"]
     sr: float = audio_info["sample_rate_hz"]
 
     # Ensure NFFT fits comfortably inside the waveform
-    max_reasonable_nfft = max(64, 2 ** int(math.floor(math.log2(max(128, samples.size // 4)))))
+    max_reasonable_nfft = max(64, 2 ** math.floor(math.log2(max(128, samples.size // 4))))
     eff_nfft = min(max(64, int(nfft)), max_reasonable_nfft, 8192)
     overlap_frac = min(0.95, max(0.10, float(overlap_pct) / 100.0))
-    noverlap = min(eff_nfft - 1, int(round(eff_nfft * overlap_frac)))
+    noverlap = min(eff_nfft - 1, round(eff_nfft * overlap_frac))
 
     win_name = window_type.lower().strip()
     if win_name == "kaiser":
@@ -544,7 +544,7 @@ def compute_spectrogram_payload(
 
     # Downsample time columns slightly if > 650 columns so JSON payload stays snappy & crisp
     if power_db.shape[1] > 650:
-        step = int(math.ceil(power_db.shape[1] / 650))
+        step = math.ceil(power_db.shape[1] / 650)
         power_db = power_db[:, ::step]
         times = times[::step]
 

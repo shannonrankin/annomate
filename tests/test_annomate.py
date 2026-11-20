@@ -13,23 +13,20 @@ Covers:
 
 from __future__ import annotations
 
-from pathlib import Path
 import struct
-import sys
 import unittest
+from pathlib import Path
 
 import numpy as np
 from fastapi.testclient import TestClient
-
-ROOT_DIR = Path(__file__).resolve().parent.parent
-if str(ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR))
 
 from app.aligner import align_and_validate_dataframe, parse_uploaded_table, suggest_column_mapping
 from app.audio_engine import _decode_pcm_bytes, compute_spectrogram_payload
 from app.bathy_and_pampal import build_bathymetry_deployment_figure, render_pampal_pamscapes_suite
 from app.main import app
 from app.schema_context import build_structured_sql, generate_sql_from_prompt
+
+ROOT_DIR = Path(__file__).resolve().parent.parent
 
 
 class TestSchemaAndSqlBuilder(unittest.TestCase):
@@ -145,15 +142,35 @@ class TestFastApiAndMarimoNotebook(unittest.TestCase):
         self.assertEqual(r_plotly.status_code, 200)
 
     def test_marimo_review_notebook_executes_cleanly(self):
+        import pandas as pd
+
+        from app.bathy_and_pampal import find_rscript_with_pamscapes, infer_dataset_timezone
         from notebooks import review_studio
 
-        outputs, defs = review_studio.app.run()
+        # Verify regional coordinate & multi-basin timezone inference
+        tz_nefsc = infer_dataset_timezone(pd.DataFrame({"latitude": [42.18], "longitude": [-70.35]}))
+        self.assertEqual(tz_nefsc["offset_hours"], -5)
+        self.assertIn("UTC-05:00", tz_nefsc["tz_short"])
+
+        tz_multi = infer_dataset_timezone(pd.DataFrame({"latitude": [42.18, 32.8], "longitude": [-70.35, -117.4]}))
+        self.assertEqual(tz_multi["offset_hours"], 0)
+        self.assertEqual(tz_multi["tz_short"], "UTC+00:00")
+
+        _outputs, defs = review_studio.app.run()
         self.assertIn("subset_df", defs)
         self.assertGreater(len(defs["subset_df"]), 0)
         bathy_fig = build_bathymetry_deployment_figure(defs["subset_df"])
         self.assertIsNotNone(bathy_fig)
-        pampal_res = render_pampal_pamscapes_suite(defs["subset_df"])
-        self.assertTrue(pampal_res.get("ok"), pampal_res)
+
+        pampal_res = render_pampal_pamscapes_suite(defs["subset_df"], polar_tz_mode="auto")
+        if find_rscript_with_pamscapes() is not None:
+            self.assertTrue(pampal_res.get("ok"), pampal_res)
+            self.assertIn("UTC-05:00", pampal_res.get("polar_tz_short", ""))
+            pampal_utc = render_pampal_pamscapes_suite(defs["subset_df"], polar_tz_mode="utc")
+            self.assertTrue(pampal_utc.get("ok"), pampal_utc)
+            self.assertEqual(pampal_utc.get("polar_tz_short"), "UTC+00:00")
+        else:
+            self.assertFalse(pampal_res.get("ok"))
 
 
     def test_demo_mode_toggle_and_filtering(self):

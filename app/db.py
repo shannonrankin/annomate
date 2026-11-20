@@ -5,11 +5,10 @@ and transactional annotation ingestion for nmfs_annotation_db.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-import json
-import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import psycopg
 from psycopg.rows import dict_row
@@ -17,7 +16,7 @@ from psycopg.rows import dict_row
 from .config import get_settings
 from .demo_data import evaluate_demo_sql, get_demo_rows
 
-_runtime_demo_override: Optional[bool] = None
+_runtime_demo_override: bool | None = None
 
 
 def is_demo_mode_active() -> bool:
@@ -69,11 +68,11 @@ def get_connection(autocommit: bool = False):
     return psycopg.connect(settings.pg_conninfo, row_factory=dict_row, autocommit=autocommit)
 
 
-_health_cache: Optional[Dict[str, Any]] = None
+_health_cache: dict[str, Any] | None = None
 _health_cache_ts: float = 0.0
 
 
-def check_db_health(force: bool = False) -> Dict[str, Any]:
+def check_db_health(force: bool = False) -> dict[str, Any]:
     """Check connectivity to nmfs_annotation_db over NOAA VPN (or return instant Demo Mode stats)."""
     global _health_cache, _health_cache_ts
     import time
@@ -103,22 +102,21 @@ def check_db_health(force: bool = False) -> Dict[str, Any]:
     if not force and _health_cache is not None and (now - _health_cache_ts) < 45.0:
         return _health_cache
     try:
-        with get_connection(autocommit=True) as conn:
-            with conn.cursor() as cur:
-                cur.execute("SET statement_timeout = '5s'")
-                cur.execute(
-                    """
-                    SELECT
-                        (SELECT count(*) FROM core.annotations) AS annotations_count,
-                        (SELECT count(*) FROM core.effort) AS effort_count,
-                        GREATEST(0, (SELECT reltuples::bigint FROM pg_class WHERE oid = 'core.acoustic_files'::regclass)) AS acoustic_files_count,
-                        GREATEST(0, (SELECT reltuples::bigint FROM pg_class WHERE oid = 'core.audio_segments'::regclass)) AS audio_segments_count,
-                        (SELECT count(*) FROM makara.recordings) AS recordings_count,
-                        (SELECT count(*) FROM makara.deployments) AS deployments_count,
-                        GREATEST(0, (SELECT reltuples::bigint FROM pg_class WHERE oid = 'reconcile.findings'::regclass)) AS active_findings_count
-                    """
-                )
-                counts = dict(cur.fetchone() or {})
+        with get_connection(autocommit=True) as conn, conn.cursor() as cur:
+            cur.execute("SET statement_timeout = '5s'")
+            cur.execute(
+                """
+                SELECT
+                    (SELECT count(*) FROM core.annotations) AS annotations_count,
+                    (SELECT count(*) FROM core.effort) AS effort_count,
+                    GREATEST(0, (SELECT reltuples::bigint FROM pg_class WHERE oid = 'core.acoustic_files'::regclass)) AS acoustic_files_count,
+                    GREATEST(0, (SELECT reltuples::bigint FROM pg_class WHERE oid = 'core.audio_segments'::regclass)) AS audio_segments_count,
+                    (SELECT count(*) FROM makara.recordings) AS recordings_count,
+                    (SELECT count(*) FROM makara.deployments) AS deployments_count,
+                    GREATEST(0, (SELECT reltuples::bigint FROM pg_class WHERE oid = 'reconcile.findings'::regclass)) AS active_findings_count
+                """
+            )
+            counts = dict(cur.fetchone() or {})
         _health_cache = {
             "connected": True,
             "mode": "live",
@@ -166,10 +164,10 @@ def validate_readonly_sql(sql: str) -> str:
     return cleaned
 
 
-def _demo_fallback_rows(limit: int = 50) -> Tuple[List[str], List[Dict[str, Any]]]:
+def _demo_fallback_rows(limit: int = 50) -> tuple[list[str], list[dict[str, Any]]]:
     """Fallback DCLDE_2013-modeled dataset used ONLY when NOAA VPN is disconnected."""
     base_dt = datetime(2009, 3, 28, 0, 5, 0, tzinfo=timezone.utc)
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     labels = ["YES", "YES", "YES", "MAYBE", "NO", "YES", "YES", "UNVERIFIED"]
     for i in range(min(limit, 24)):
         st = base_dt + timedelta(minutes=i * 17, seconds=(i * 13) % 45)
@@ -223,7 +221,7 @@ def _demo_fallback_rows(limit: int = 50) -> Tuple[List[str], List[Dict[str, Any]
 def execute_readonly_query(
     sql: str,
     max_rows: int = 5000,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Execute a validated read-only SQL query against nmfs_annotation_db
     (or evaluate instantly against the built-in multi-day Demo catalog when Demo Mode is on).
@@ -293,100 +291,99 @@ def execute_readonly_query(
         }
 
 
-def fetch_reference_catalog() -> Dict[str, Any]:
+def fetch_reference_catalog() -> dict[str, Any]:
     """Fetch controlled vocabularies, efforts, analyses, procedures, and channels for dropdowns & alignment."""
     if is_demo_mode_active():
         return _build_demo_catalog("demo")
     try:
-        with get_connection(autocommit=True) as conn:
-            with conn.cursor() as cur:
-                cur.execute("SET statement_timeout = '10s'")
+        with get_connection(autocommit=True) as conn, conn.cursor() as cur:
+            cur.execute("SET statement_timeout = '10s'")
 
-                cur.execute("SELECT code, name FROM makara.organizations ORDER BY code")
-                organizations = [dict(r) for r in cur.fetchall()]
+            cur.execute("SELECT code, name FROM makara.organizations ORDER BY code")
+            organizations = [dict(r) for r in cur.fetchall()]
 
-                cur.execute(
-                    """
-                    SELECT ct.code, ct.name, ct.description,
-                           COALESCE(
-                               array_agg( DISTINCT ss.code ) FILTER (WHERE ss.code IS NOT NULL),
-                               ARRAY[]::varchar[]
-                           ) AS sound_source_codes
-                    FROM makara.call_types ct
-                    LEFT JOIN makara.call_types_sound_sources ctss ON ctss.call_type_code = ct.code
-                    LEFT JOIN makara.sound_sources ss ON ss.code = ctss.sound_source_code
-                    GROUP BY ct.code, ct.name, ct.description
-                    ORDER BY ct.code
-                    """
-                )
-                call_types = [{k: serialize_value(v) for k, v in dict(r).items()} for r in cur.fetchall()]
+            cur.execute(
+                """
+                SELECT ct.code, ct.name, ct.description,
+                       COALESCE(
+                           array_agg( DISTINCT ss.code ) FILTER (WHERE ss.code IS NOT NULL),
+                           ARRAY[]::varchar[]
+                       ) AS sound_source_codes
+                FROM makara.call_types ct
+                LEFT JOIN makara.call_types_sound_sources ctss ON ctss.call_type_code = ct.code
+                LEFT JOIN makara.sound_sources ss ON ss.code = ctss.sound_source_code
+                GROUP BY ct.code, ct.name, ct.description
+                ORDER BY ct.code
+                """
+            )
+            call_types = [{k: serialize_value(v) for k, v in dict(r).items()} for r in cur.fetchall()]
 
-                cur.execute("SELECT code, legacy_id, name, is_protocol_inferred, description FROM core.annotation_labels ORDER BY legacy_id")
-                labels = [dict(r) for r in cur.fetchall()]
+            cur.execute("SELECT code, legacy_id, name, is_protocol_inferred, description FROM core.annotation_labels ORDER BY legacy_id")
+            labels = [dict(r) for r in cur.fetchall()]
 
-                cur.execute("SELECT code, name, description FROM makara.analysis_granularity_types ORDER BY code")
-                granularities = [dict(r) for r in cur.fetchall()]
+            cur.execute("SELECT code, name, description FROM makara.analysis_granularity_types ORDER BY code")
+            granularities = [dict(r) for r in cur.fetchall()]
 
-                cur.execute("SELECT code, name, release_noaa, release_pacm, release_data, description FROM core.sharing_scopes ORDER BY code")
-                sharing_scopes = [dict(r) for r in cur.fetchall()]
+            cur.execute("SELECT code, name, release_noaa, release_pacm, release_data, description FROM core.sharing_scopes ORDER BY code")
+            sharing_scopes = [dict(r) for r in cur.fetchall()]
 
-                cur.execute(
-                    """
-                    SELECT e.id, e.organization_code, e.name, e.description,
-                           count(be.bin_id) AS bin_count
-                    FROM core.effort e
-                    LEFT JOIN core.bins_effort be ON be.effort_id = e.id
-                    GROUP BY e.id, e.organization_code, e.name, e.description
-                    ORDER BY e.name
-                    """
-                )
-                efforts = [{k: serialize_value(v) for k, v in dict(r).items()} for r in cur.fetchall()]
+            cur.execute(
+                """
+                SELECT e.id, e.organization_code, e.name, e.description,
+                       count(be.bin_id) AS bin_count
+                FROM core.effort e
+                LEFT JOIN core.bins_effort be ON be.effort_id = e.id
+                GROUP BY e.id, e.organization_code, e.name, e.description
+                ORDER BY e.name
+                """
+            )
+            efforts = [{k: serialize_value(v) for k, v in dict(r).items()} for r in cur.fetchall()]
 
-                cur.execute(
-                    """
-                    SELECT id, organization_code, code, name, description
-                    FROM core.analyses
-                    ORDER BY organization_code, id
-                    """
-                )
-                analyses = [{k: serialize_value(v) for k, v in dict(r).items()} for r in cur.fetchall()]
+            cur.execute(
+                """
+                SELECT id, organization_code, code, name, description
+                FROM core.analyses
+                ORDER BY organization_code, id
+                """
+            )
+            analyses = [{k: serialize_value(v) for k, v in dict(r).items()} for r in cur.fetchall()]
 
-                cur.execute(
-                    """
-                    SELECT p.id, p.analysis_id, a.organization_code, a.name AS analysis_name,
-                           p.name, p.description, lower(p.freqrange) AS freq_min_hz, upper(p.freqrange) AS freq_max_hz
-                    FROM core.procedures p
-                    JOIN core.analyses a ON a.id = p.analysis_id
-                    ORDER BY p.id DESC
-                    """
-                )
-                procedures = [{k: serialize_value(v) for k, v in dict(r).items()} for r in cur.fetchall()]
+            cur.execute(
+                """
+                SELECT p.id, p.analysis_id, a.organization_code, a.name AS analysis_name,
+                       p.name, p.description, lower(p.freqrange) AS freq_min_hz, upper(p.freqrange) AS freq_max_hz
+                FROM core.procedures p
+                JOIN core.analyses a ON a.id = p.analysis_id
+                ORDER BY p.id DESC
+                """
+            )
+            procedures = [{k: serialize_value(v) for k, v in dict(r).items()} for r in cur.fetchall()]
 
-                cur.execute(
-                    """
-                    SELECT rc.id AS recording_channel_id,
-                           rc.recording_id,
-                           rc.channel,
-                           rec.code AS recording_code,
-                           dep.code AS deployment_code,
-                           dep.organization_code,
-                           lower(rc.tstzrange) AS channel_start_utc,
-                           upper(rc.tstzrange) AS channel_end_utc
-                    FROM core.recording_channels rc
-                    JOIN makara.recordings rec ON rec.id = rc.recording_id
-                    LEFT JOIN makara.deployments dep ON dep.id = rec.deployment_id
-                    ORDER BY (EXISTS (SELECT 1 FROM core.annotations a WHERE a.recording_channel_id = rc.id)) DESC,
-                             rc.id ASC
-                    LIMIT 250
-                    """
-                )
-                recording_channels = [{k: serialize_value(v) for k, v in dict(r).items()} for r in cur.fetchall()]
+            cur.execute(
+                """
+                SELECT rc.id AS recording_channel_id,
+                       rc.recording_id,
+                       rc.channel,
+                       rec.code AS recording_code,
+                       dep.code AS deployment_code,
+                       dep.organization_code,
+                       lower(rc.tstzrange) AS channel_start_utc,
+                       upper(rc.tstzrange) AS channel_end_utc
+                FROM core.recording_channels rc
+                JOIN makara.recordings rec ON rec.id = rc.recording_id
+                LEFT JOIN makara.deployments dep ON dep.id = rec.deployment_id
+                ORDER BY (EXISTS (SELECT 1 FROM core.annotations a WHERE a.recording_channel_id = rc.id)) DESC,
+                         rc.id ASC
+                LIMIT 250
+                """
+            )
+            recording_channels = [{k: serialize_value(v) for k, v in dict(r).items()} for r in cur.fetchall()]
 
-                cur.execute("SELECT code, name, description FROM core.effproc_types ORDER BY code")
-                effproc_types = [dict(r) for r in cur.fetchall()]
+            cur.execute("SELECT code, name, description FROM core.effproc_types ORDER BY code")
+            effproc_types = [dict(r) for r in cur.fetchall()]
 
-                cur.execute("SELECT code, name, description FROM core.effproc_assumptions ORDER BY code")
-                effproc_assumptions = [dict(r) for r in cur.fetchall()]
+            cur.execute("SELECT code, name, description FROM core.effproc_assumptions ORDER BY code")
+            effproc_assumptions = [dict(r) for r in cur.fetchall()]
 
         return {
             "mode": "live",
@@ -406,7 +403,7 @@ def fetch_reference_catalog() -> Dict[str, Any]:
         return _build_demo_catalog("demo_fallback", error=str(exc))
 
 
-def _build_demo_catalog(mode: str = "demo", error: Optional[str] = None) -> Dict[str, Any]:
+def _build_demo_catalog(mode: str = "demo", error: str | None = None) -> dict[str, Any]:
     return {
         "mode": mode,
         "error": error,
@@ -463,7 +460,7 @@ def _build_demo_catalog(mode: str = "demo", error: Optional[str] = None) -> Dict
     }
 
 
-def fetch_annotation_audio_context(annotation_id: int) -> Optional[Dict[str, Any]]:
+def fetch_annotation_audio_context(annotation_id: int) -> dict[str, Any] | None:
     """Fetch complete audio segment & GCS container geometry for a single annotation ID."""
     if is_demo_mode_active():
         for r in get_demo_rows():
@@ -533,12 +530,11 @@ def fetch_annotation_audio_context(annotation_id: int) -> Optional[Dict[str, Any
         WHERE a.id = %s
     """
     try:
-        with get_connection(autocommit=True) as conn:
-            with conn.cursor() as cur:
-                cur.execute(sql, (annotation_id,))
-                row = cur.fetchone()
-                if row:
-                    return {k: serialize_value(v) for k, v in dict(row).items()}
+        with get_connection(autocommit=True) as conn, conn.cursor() as cur:
+            cur.execute(sql, (annotation_id,))
+            row = cur.fetchone()
+            if row:
+                return {k: serialize_value(v) for k, v in dict(row).items()}
     except Exception:
         pass
 

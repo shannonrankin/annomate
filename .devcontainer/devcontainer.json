@@ -1,0 +1,19 @@
+{
+  "name": "Annomate Bioacoustics (Offline Demo Mode)",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11",
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y libsndfile1 && pip install -r requirements.txt",
+  "postAttachCommand": {
+    "annomate-demo": "ANNOMATE_DEMO_MODE=true uvicorn app.main:app --host 0.0.0.0 --port 8000"
+  },
+  "forwardPorts": [8000, 2718],
+  "portsAttributes": {
+    "8000": {
+      "label": "Annomate Web Platform (Demo Mode)",
+      "onAutoForward": "openBrowser"
+    },
+    "2718": {
+      "label": "Marimo Review Studio",
+      "onAutoForward": "notify"
+    }
+  }
+}

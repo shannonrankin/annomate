@@ -31,6 +31,7 @@ def _():
     from app.audio_engine import compute_spectrogram_payload
     from app.bathy_and_pampal import (
         build_bathymetry_deployment_figure,
+        infer_dataset_timezone,
         render_pampal_pamscapes_suite,
     )
     from app.config import REVIEW_SESSION_DIR, get_settings
@@ -211,6 +212,7 @@ def _():
         fetch_annotation_audio_context,
         get_settings,
         go,
+        infer_dataset_timezone,
         json,
         logo_b64,
         make_subplots,
@@ -467,12 +469,12 @@ def _(SHADOW_STYLE, dataset_label, full_df, mo, sample_n, seed_input, stratify_b
 @app.cell
 def _(build_bathymetry_deployment_figure, mo, pd, px, subset_df):
     plot_template = "plotly_dark"
-    common_layout = dict(
-        paper_bgcolor="#0b192b",
-        plot_bgcolor="#07111f",
-        font=dict(family="Plus Jakarta Sans, sans-serif", color="#e2e8f0", size=12),
-        margin=dict(l=48, r=24, t=48, b=42),
-    )
+    common_layout = {
+        "paper_bgcolor": "#0b192b",
+        "plot_bgcolor": "#07111f",
+        "font": {"family": "Plus Jakarta Sans, sans-serif", "color": "#e2e8f0", "size": 12},
+        "margin": {"l": 48, "r": 24, "t": 48, "b": 42},
+    }
 
     figs = []
 
@@ -555,7 +557,7 @@ def _(build_bathymetry_deployment_figure, mo, pd, px, subset_df):
 
 
 @app.cell
-def _(mo):
+def _(full_df, infer_dataset_timezone, mo):
     pampal_box_bin = mo.ui.dropdown(
         options={
             "Hours per Day (hour/day)": "hour/day",
@@ -578,12 +580,33 @@ def _(mo):
     )
     pampal_polar_bin = mo.ui.dropdown(
         options={
-            "Detections by UTC Hour (detection/hour)": "detection/hour",
-            "Hours by UTC Hour (hour/hour)": "hour/hour",
+            "Detections by Hour of Day (detection/hour)": "detection/hour",
+            "Hours by Hour of Day (hour/hour)": "hour/hour",
             "Days by Month (day/month)": "day/month",
         },
-        value="Detections by UTC Hour (detection/hour)",
+        value="Detections by Hour of Day (detection/hour)",
         label="Polar Detections Cycle",
+    )
+
+    _inferred_tz = infer_dataset_timezone(full_df)
+    _auto_lbl = f"Dataset Default ({_inferred_tz['tz_short']})"
+    _tz_opts = {_auto_lbl: "auto"}
+    if int(_inferred_tz.get("offset_hours", 0)) != 0:
+        _tz_opts["UTC · Database Native (UTC+00:00)"] = "utc"
+    for _tz_disp, _tz_code in [
+        ("NW/SE Atlantic · EST (UTC-05:00)", "utc-5"),
+        ("Gulf of Mexico · CST (UTC-06:00)", "utc-6"),
+        ("California Current · PST (UTC-08:00)", "utc-8"),
+        ("Alaska · AKST (UTC-09:00)", "utc-9"),
+        ("Hawaiian Islands · HST (UTC-10:00)", "utc-10"),
+    ]:
+        if _tz_code not in _tz_opts.values():
+            _tz_opts[_tz_disp] = _tz_code
+
+    pampal_polar_tz = mo.ui.dropdown(
+        options=_tz_opts,
+        value=_auto_lbl,
+        label="Polar Plot Time Zone",
     )
 
     mo.vstack(
@@ -591,12 +614,17 @@ def _(mo):
             mo.md("## R `PAMpal` / `PAMscapes` Acoustic Analysis Plots"),
             mo.md(
                 "Authentic NOAA SWFSC FOSSA suite plots (`plotDetectionBoxplot`, `plotAcousticScene`, and `plotPolarDetections`) "
-                "rendered directly in R on your active subset:"
+                "rendered directly in R on your active subset, with automatic hydrophone site standard time zone detection for diel polar plots:"
             ),
-            mo.hstack([pampal_box_bin, pampal_scene_bin, pampal_polar_bin], justify="start", wrap=True, gap=1.5),
+            mo.hstack(
+                [pampal_box_bin, pampal_scene_bin, pampal_polar_bin, pampal_polar_tz],
+                justify="start",
+                wrap=True,
+                gap=1.5,
+            ),
         ]
     )
-    return pampal_box_bin, pampal_polar_bin, pampal_scene_bin
+    return pampal_box_bin, pampal_polar_bin, pampal_polar_tz, pampal_scene_bin
 
 
 @app.cell
@@ -605,6 +633,7 @@ def _(
     mo,
     pampal_box_bin,
     pampal_polar_bin,
+    pampal_polar_tz,
     pampal_scene_bin,
     render_pampal_pamscapes_suite,
     subset_df,
@@ -614,6 +643,7 @@ def _(
         box_bin=pampal_box_bin.value,
         scene_bin=pampal_scene_bin.value,
         polar_bin=pampal_polar_bin.value,
+        polar_tz_mode=pampal_polar_tz.value,
     )
     if not pampal_res.get("ok"):
         pampal_view = mo.callout(
@@ -625,7 +655,7 @@ def _(
             SHADOW_STYLE
             + f"""
             <div style="font-family:monospace; font-size:11.5px; color:#34d399; margin-bottom:6px;">
-              ✓ Rendered via {pampal_res['rscript']} · PAMscapes / PAMpal
+              ✓ Rendered via {pampal_res['rscript']} · PAMscapes / PAMpal · Polar Time Zone: <span style="color:#22d3ee;">{pampal_res.get('polar_tz_label', 'UTC+00:00')}</span>
             </div>
             <div class="ann-pampal-grid">
               <div class="ann-pampal-card">
@@ -881,7 +911,7 @@ def _(
             zmin=spec["z_min_db"],
             zmax=spec["z_max_db"],
             colorscale=resolved_cmap,
-            colorbar=dict(title="PSD (dB)", len=0.70, y=0.64),
+            colorbar={"title": "PSD (dB)", "len": 0.70, "y": 0.64},
             hovertemplate="Time: %{x:.3f}s<br>Freq: %{y:.1f} Hz<br>Power: %{z:.1f} dB<extra></extra>",
         ),
         row=1,
@@ -898,7 +928,7 @@ def _(
         x1=cbox["t1"],
         y0=f0,
         y1=min(f1, max(spec["freqs_hz"])),
-        line=dict(color=box_color, width=2.4, dash="dash" if is_explicit_synthetic else "solid"),
+        line={"color": box_color, "width": 2.4, "dash": "dash" if is_explicit_synthetic else "solid"},
         fillcolor="rgba(250, 204, 21, 0.08)" if is_explicit_synthetic else "rgba(34, 211, 238, 0.10)",
         row=1,
         col=1,
@@ -909,7 +939,7 @@ def _(
             x=spec["waveform"]["t"],
             y=spec["waveform"]["y"],
             mode="lines",
-            line=dict(color=box_color, width=1.1),
+            line={"color": box_color, "width": 1.1},
             name="Amplitude",
             hovertemplate="Time: %{x:.3f}s<br>Amp: %{y:.3f}<extra></extra>",
         ),
@@ -928,14 +958,14 @@ def _(
         plot_bgcolor="#07111f",
         height=500,
         showlegend=False,
-        margin=dict(l=58, r=30, t=44, b=48),
+        margin={"l": 58, "r": 30, "t": 44, "b": 48},
     )
 
     is_live_gcs = spec["source_status"].startswith("live")
-    gs_uri = meta_ctx.get("obj_gsuri") or ""
+    gs_uri = str(meta_ctx.get("obj_gsuri") or "")
     gcs_console_url = (
         f"https://console.cloud.google.com/storage/browser/_details/{gs_uri[5:]}"
-        if str(gs_uri).startswith("gs://")
+        if gs_uri.startswith("gs://")
         else "#"
     )
 
@@ -1065,37 +1095,38 @@ def _(get_settings, mo, pd, subset_df):
         if subset_df.empty:
             return "No rows are currently loaded. Select a dataset source at the top of the notebook to start exploring."
 
-        if any(w in lower_q for w in ["freq", "hz", "band", "pitch"]):
-            if "freq_min_hz" in subset_df.columns and "freq_max_hz" in subset_df.columns:
-                bw = (subset_df["freq_max_hz"] - subset_df["freq_min_hz"]).dropna()
-                return (
-                    f"### Frequency Profile ({len(subset_df):,} calls)\n"
-                    f"- **Low Frequency (`freq_min_hz`)**: median **{subset_df['freq_min_hz'].median():.1f} Hz** "
-                    f"(range `{subset_df['freq_min_hz'].min():.1f}` – `{subset_df['freq_min_hz'].max():.1f} Hz`)\n"
-                    f"- **High Frequency (`freq_max_hz`)**: median **{subset_df['freq_max_hz'].median():.1f} Hz** "
-                    f"(range `{subset_df['freq_max_hz'].min():.1f}` – `{subset_df['freq_max_hz'].max():.1f} Hz`)\n"
-                    f"- **Bandwidth**: median **{bw.median():.1f} Hz** (IQR `{bw.quantile(0.25):.1f}` – `{bw.quantile(0.75):.1f} Hz`)"
-                )
+        if (
+            any(w in lower_q for w in ["freq", "hz", "band", "pitch"])
+            and "freq_min_hz" in subset_df.columns
+            and "freq_max_hz" in subset_df.columns
+        ):
+            bw = (subset_df["freq_max_hz"] - subset_df["freq_min_hz"]).dropna()
+            return (
+                f"### Frequency Profile ({len(subset_df):,} calls)\n"
+                f"- **Low Frequency (`freq_min_hz`)**: median **{subset_df['freq_min_hz'].median():.1f} Hz** "
+                f"(range `{subset_df['freq_min_hz'].min():.1f}` – `{subset_df['freq_min_hz'].max():.1f} Hz`)\n"
+                f"- **High Frequency (`freq_max_hz`)**: median **{subset_df['freq_max_hz'].median():.1f} Hz** "
+                f"(range `{subset_df['freq_max_hz'].min():.1f}` – `{subset_df['freq_max_hz'].max():.1f} Hz`)\n"
+                f"- **Bandwidth**: median **{bw.median():.1f} Hz** (IQR `{bw.quantile(0.25):.1f}` – `{bw.quantile(0.75):.1f} Hz`)"
+            )
 
-        if any(w in lower_q for w in ["dur", "long", "short", "length"]):
-            if "duration_secs" in subset_df.columns:
-                d = subset_df["duration_secs"].dropna()
-                return (
-                    f"### Call Duration Summary ({len(d):,} calls)\n"
-                    f"- **Median duration**: **{d.median():.2f} s** (mean `{d.mean():.2f} ± {d.std():.2f} s`)\n"
-                    f"- **Range**: `{d.min():.2f} s` to `{d.max():.2f} s` (90th percentile: `{d.quantile(0.9):.2f} s`)"
-                )
+        if any(w in lower_q for w in ["dur", "long", "short", "length"]) and "duration_secs" in subset_df.columns:
+            d = subset_df["duration_secs"].dropna()
+            return (
+                f"### Call Duration Summary ({len(d):,} calls)\n"
+                f"- **Median duration**: **{d.median():.2f} s** (mean `{d.mean():.2f} ± {d.std():.2f} s`)\n"
+                f"- **Range**: `{d.min():.2f} s` to `{d.max():.2f} s` (90th percentile: `{d.quantile(0.9):.2f} s`)"
+            )
 
-        if any(w in lower_q for w in ["hour", "diel", "time", "when", "day", "night"]):
-            if "start_time_utc" in subset_df.columns:
-                ts = pd.to_datetime(subset_df["start_time_utc"], utc=True, errors="coerce").dropna()
-                top_hrs = ts.dt.hour.value_counts().head(3)
-                hr_str = ", ".join(f"**{h:02d}:00 UTC** ({c} calls)" for h, c in top_hrs.items())
-                return (
-                    f"### Temporal & Diel Activity\n"
-                    f"- **Window**: `{ts.min().isoformat()}` → `{ts.max().isoformat()}`\n"
-                    f"- **Peak UTC hours**: {hr_str}"
-                )
+        if any(w in lower_q for w in ["hour", "diel", "time", "when", "day", "night"]) and "start_time_utc" in subset_df.columns:
+            ts = pd.to_datetime(subset_df["start_time_utc"], utc=True, errors="coerce").dropna()
+            top_hrs = ts.dt.hour.value_counts().head(3)
+            hr_str = ", ".join(f"**{h:02d}:00 UTC** ({c} calls)" for h, c in top_hrs.items())
+            return (
+                f"### Temporal & Diel Activity\n"
+                f"- **Window**: `{ts.min().isoformat()}` → `{ts.max().isoformat()}`\n"
+                f"- **Peak UTC hours**: {hr_str}"
+            )
 
         if any(w in lower_q for w in ["audio", "gcs", "xwav", "x.flac", "aif", "file"]):
             n_linked = int(subset_df["obj_gsuri"].notna().sum()) if "obj_gsuri" in subset_df.columns else 0
