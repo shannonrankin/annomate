@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>annomate · Bioacoustic Annotation & Cloud Metadata Platform</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="/vendor/plotly.min.js" defer></script>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <!-- Ambient Pelagic Acoustic Header Canvas -->
+  <div class="ambient-backdrop" aria-hidden="true">
+    <canvas id="acousticWaveCanvas"></canvas>
+    <div class="ambient-glow glow-cyan"></div>
+    <div class="ambient-glow glow-teal"></div>
+  </div>
+
+  <!-- Top Telemetry & Navigation Shell -->
+  <header class="top-shell">
+    <div class="top-bar">
+      <div class="brand-cluster">
+        <div class="brand-mark">
+          <img src="/assets/annomate_tile_no_background.png" alt="annomate logo" class="brand-tile-img" />
+        </div>
+        <div>
+          <div class="brand-title-row">
+            <span class="brand-name">annomate</span>
+            <span class="brand-version">NMFS PAM v1.0</span>
+          </div>
+          <p class="brand-subtitle">Bioacoustic Annotation Discovery, Cloud Audio Linkage &amp; Standardization</p>
+        </div>
+      </div>
+
+      <!-- Live Infrastructure Telemetry Strip -->
+      <div class="telemetry-strip">
+        <button class="telemetry-pill demo-toggle-pill" id="demoModeToggleBtn" type="button" title="Toggle Offline Demo Mode (runs without VPN or Google Cloud)">
+          <span class="status-dot" id="demoStatusDot"></span>
+          <span id="demoStatusText">Demo Mode: OFF</span>
+        </button>
+        <button class="telemetry-pill" id="dbStatusPill" title="PostgreSQL connection status (requires NOAA VPN)">
+          <span class="status-dot" id="dbStatusDot"></span>
+          <span id="dbStatusText">Checking DB…</span>
+        </button>
+        <button class="telemetry-pill" id="gcsStatusPill" title="Click for Google Cloud Storage authentication info">
+          <span class="status-dot" id="gcsStatusDot"></span>
+          <span id="gcsStatusText">GCS Audio</span>
+        </button>
+        <a class="btn-ghost-sm" href="/guide?section=quickstart" target="_blank" rel="noopener" title="Step-by-step documentation and component guides">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+          Docs &amp; Guides ↗
+        </a>
+        <a class="btn-ghost-sm" href="https://anndb-frontend-app-948464146942.us-east4.run.app/" target="_blank" rel="noopener" title="Interactive NMFS Database ERD & System Diagram (NOAA Login)">
+          ERD Diagram ↗
+        </a>
+        <button class="icon-btn" id="themeToggleBtn" type="button" title="Toggle Abyssal Dark / Daylight Deck theme" aria-label="Toggle color theme">
+          <svg id="themeIconSun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+        </button>
+        <button class="icon-btn" id="openSettingsBtn" type="button" title="Configure Gemini API Key & Cloud Settings" aria-label="Settings">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Primary 4-Module Workspace Navigation -->
+    <nav class="module-nav" role="tablist" aria-label="Annomate Modules">
+      <button class="module-tab active" role="tab" aria-selected="true" data-tab="find">
+        <span class="tab-index">01</span>
+        <span class="tab-label">Find &amp; Filter Data</span>
+        <span class="tab-sub">Voice/Text → SQL &amp; CSV</span>
+      </button>
+      <button class="module-tab" role="tab" aria-selected="false" data-tab="review">
+        <span class="tab-index">02</span>
+        <span class="tab-label">Review Data</span>
+        <span class="tab-sub">Marimo Studio &amp; Spectrograms</span>
+      </button>
+      <button class="module-tab" role="tab" aria-selected="false" data-tab="export">
+        <span class="tab-index">03</span>
+        <span class="tab-label">Export Data</span>
+        <span class="tab-sub">Metadata + Cloud Audio URIs</span>
+      </button>
+      <button class="module-tab" role="tab" aria-selected="false" data-tab="align">
+        <span class="tab-index">04</span>
+        <span class="tab-label">Add &amp; Align Annotations</span>
+        <span class="tab-sub">Standardize &amp; Ingest</span>
+      </button>
+    </nav>
+  </header>
+
+  <!-- Main Workspace Container -->
+  <main class="workspace">
+
+    <!-- ================================================================== -->
+    <!-- MODULE 01: FIND & FILTER DATA                                      -->
+    <!-- ================================================================== -->
+    <section class="tab-panel active" id="panel-find" role="tabpanel">
+      <!-- Inline Expandable Annotation Data Explanation Banner -->
+      <div class="explainer-card" id="inlineExplainerCard">
+        <div class="explainer-header">
+          <div class="explainer-title-group">
+            <span class="eyebrow-badge">SCHEMA ARCHITECTURE</span>
+            <h2>How Acoustic Annotations Link to Metadata &amp; Cloud Audio</h2>
+          </div>
+          <div class="explainer-actions">
+            <a href="/guide?section=find" target="_blank" class="link-accent">Find &amp; Filter Guide ↗</a>
+            <a href="/guide?section=schema" target="_blank" class="link-accent">Schema Reference ↗</a>
+            <button class="btn-subtle" id="toggleExplainerBtn" type="button">Show Overview</button>
+          </div>
+        </div>
+        <div class="explainer-body" id="explainerBody" hidden>
+          <div class="explainer-grid">
+            <div class="explainer-copy">
+              <p>
+                <strong><code>nmfs_annotation_db</code></strong> unites authoritative deployment metadata from <strong>Makara</strong> with physical hydrophone containers in <strong>Google Cloud Storage (<code>gs://</code>)</strong>.
+                Annotations in <code>core.annotations</code> store indexed UTC time bounds (<code>tstzrange</code>), frequency bounds (<code>freqrange</code>), verification labels (<code>YES</code>, <code>NO</code>, <code>MAYBE</code>, <code>UNVERIFIED</code>), and steward <code>organization_code</code>.
+              </p>
+              <p>
+                <strong>Why annotations link to <code>recording_channel_id</code> instead of a single filename:</strong>
+                HARP <code>.x.wav</code> / <code>.x.flac</code> containers pack dozens of raw subfiles inside one object, multi-channel MARUs separate deployments by channel, and continuous calls can span consecutive files. Joining via PostgreSQL GiST temporal overlap (<code>seg.tstzrange &amp;&amp; a.tstzrange</code>) resolves exact cloud URIs and byte offsets in milliseconds.
+              </p>
+              <p class="explainer-note">
+                <strong>Working Dataset &amp; Crawler Whitelist:</strong> Try the populated NEFSC North Atlantic Right Whale dataset (<code>effort = DCLDE_2013</code>, 5,649 verified upcalls). Because GCS uses Autoclass storage, if a recording you need isn't crawled yet, <em>ask Dan</em> to add it to the crawler whitelist.
+              </p>
+            </div>
+            <!-- Crisp Relational Architecture Mini-Diagram -->
+            <div class="schema-diagram-box" aria-label="Relational schema flow diagram">
+              <svg viewBox="0 0 516 185" class="schema-svg">
+                <!-- Nodes -->
+                <g class="s-node">
+                  <rect x="8" y="14" width="150" height="58" rx="9" fill="#0e223b" stroke="#38bdf8" stroke-width="1.4"/>
+                  <text x="20" y="34" class="svg-tag" fill="#38bdf8">MAKARA SCHEMA</text>
+                  <text x="20" y="51" class="svg-title">deployments &amp;</text>
+                  <text x="20" y="64" class="svg-title">recordings</text>
+                </g>
+                <g class="s-node">
+                  <rect x="190" y="14" width="144" height="58" rx="9" fill="#0e223b" stroke="#22d3ee" stroke-width="1.6"/>
+                  <text x="202" y="34" class="svg-tag" fill="#22d3ee">LOGICAL STREAM</text>
+                  <text x="202" y="52" class="svg-title">core.recording_</text>
+                  <text x="202" y="65" class="svg-title">channels</text>
+                </g>
+                <g class="s-node">
+                  <rect x="190" y="108" width="144" height="64" rx="9" fill="#102b3f" stroke="#34d399" stroke-width="1.8"/>
+                  <text x="202" y="128" class="svg-tag" fill="#34d399">ANNOTATIONS</text>
+                  <text x="202" y="146" class="svg-title">core.annotations</text>
+                  <text x="202" y="161" class="svg-sub">tstzrange · freqrange</text>
+                </g>
+                <g class="s-node">
+                  <rect x="364" y="14" width="144" height="58" rx="9" fill="#0e223b" stroke="#f59e0b" stroke-width="1.4"/>
+                  <text x="376" y="34" class="svg-tag" fill="#f59e0b">PHYSICAL SLICES</text>
+                  <text x="376" y="52" class="svg-title">core.audio_segments</text>
+                  <text x="376" y="65" class="svg-sub">byte_offset · subfile</text>
+                </g>
+                <g class="s-node">
+                  <rect x="364" y="108" width="144" height="64" rx="9" fill="#0e223b" stroke="#f59e0b" stroke-width="1.4"/>
+                  <text x="376" y="128" class="svg-tag" fill="#f59e0b">CLOUD STORAGE</text>
+                  <text x="376" y="146" class="svg-title">core.acoustic_files</text>
+                  <text x="376" y="161" class="svg-sub">gs:// .wav .aif .x.flac</text>
+                </g>
+                <g class="s-node">
+                  <rect x="8" y="108" width="150" height="64" rx="9" fill="#0e223b" stroke="#a78bfa" stroke-width="1.4"/>
+                  <text x="20" y="128" class="svg-tag" fill="#a78bfa">STUDY &amp; EFFORT</text>
+                  <text x="20" y="146" class="svg-title">analyses · procedures</text>
+                  <text x="20" y="161" class="svg-sub">effort · bins (DCLDE)</text>
+                </g>
+                <!-- Connectors -->
+                <path d="M158 43 L190 43" stroke="#38bdf8" stroke-width="1.6"/>
+                <path d="M262 108 L262 72" stroke="#34d399" stroke-width="1.8"/>
+                <path d="M334 43 L364 43" stroke="#f59e0b" stroke-width="1.6"/>
+                <path d="M436 72 L436 108" stroke="#f59e0b" stroke-width="1.6"/>
+                <path d="M158 140 L190 140" stroke="#a78bfa" stroke-width="1.6"/>
+                <path d="M334 135 C350 135 348 58 364 58" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="4 3" fill="none"/>
+                <text x="339" y="96" class="svg-tag" fill="#22d3ee">&amp;&amp;</text>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Two-Column Query Composer & SQL Studio -->
+      <div class="find-grid">
+        <!-- Left Column: Voice/Text Prompt + Metadata Scope + Filters -->
+        <div class="panel-card">
+          <div class="card-header">
+            <div>
+              <span class="eyebrow-badge">NATURAL LANGUAGE + MULTIMODAL INPUT</span>
+              <h3>Describe the Bioacoustic Data You Need</h3>
+            </div>
+            <span class="engine-badge" id="nlEngineBadge">Schema-Aware + Gemini Ready</span>
+          </div>
+
+          <div class="prompt-composer">
+            <textarea id="nlPromptInput" rows="3" placeholder="Describe by voice or text—e.g. &quot;Find all verified right whale upcalls in DCLDE_2013 between 50 and 220 Hz, including deployment coordinates and GCS audio paths&quot;"></textarea>
+
+            <!-- Live Voice Recording Strip -->
+            <div class="voice-controls-row">
+              <div class="voice-left">
+                <button class="btn-voice" id="recordVoiceBtn" type="button">
+                  <span class="mic-dot"></span>
+                  <span id="recordVoiceLabel">Speak Query</span>
+                </button>
+                <label class="btn-subtle file-label" title="Upload a recorded voice memo (.wav, .mp3, .webm)">
+                  <input type="file" id="audioPromptFileInput" accept="audio/*" hidden />
+                  Upload Audio Prompt
+                </label>
+                <canvas id="micWaveformCanvas" width="120" height="28" class="mic-canvas" hidden></canvas>
+                <span class="voice-status" id="voiceStatusText"></span>
+              </div>
+              <button class="btn-primary" id="generateSqlBtn" type="button">
+                Generate SQL &amp; Preview Data →
+              </button>
+            </div>
+          </div>
+
+          <!-- Quick Curated Example Chips -->
+          <div class="preset-chips-wrap">
+            <span class="chips-label">Try an example:</span>
+            <button class="chip" type="button" data-example="Find verified positive right whale upcalls in DCLDE_2013 with deployment coordinates and GCS audio paths" data-layers="annotations,provenance,makara,audio">DCLDE_2013 Right Whale Upcalls + Audio</button>
+            <button class="chip" type="button" data-example="Annotations only: RW_UPCALL detections between 40 and 220 Hz limit 300" data-layers="annotations">Annotations Dataset Only (40–220 Hz)</button>
+            <button class="chip" type="button" data-example="Random sample of 150 annotations from NEFSC with procedure, effort, deployment depth, and GCS byte offsets" data-layers="annotations,provenance,makara,audio">Random 150 Sample w/ Full Metadata</button>
+            <button class="chip" type="button" data-example="Annotations with reconciliation audit status and recording channel details limit 200" data-layers="annotations,makara,audio,reconcile">Include Reconciliation Status</button>
+          </div>
+
+          <!-- Collapsible Subsection 1: Select Relational Metadata Scope (Default Hidden) -->
+          <details class="structured-filters collapsible-subpanel" id="scopeDetailsPanel">
+            <summary class="subpanel-summary">
+              <span class="subpanel-summary-title">Select Relational Metadata Scope</span>
+              <span class="subpanel-summary-meta" id="scopeSummaryBadge">4 layers selected · Click to expand</span>
+            </summary>
+            <div class="subpanel-content">
+              <div class="scope-header">
+                <p class="muted-sm">Query only the core annotation table or join related tables across <code>makara</code>, <code>core</code>, and <code>reconcile</code>.</p>
+                <div class="scope-quick-btns">
+                  <button class="btn-xs" type="button" id="scopeOnlyAnnotationsBtn">Annotations Only</button>
+                  <button class="btn-xs" type="button" id="scopeFullMetadataBtn">All Relational Layers</button>
+                </div>
+              </div>
+
+              <div class="base-layer-banner">
+                <div>
+                  <strong>Base Dataset: <code>core.annotations</code></strong>
+                  <span style="color:var(--text-secondary); margin-left:6px;">UTC start/end, Hz bounds, call type, label, sharing, org</span>
+                </div>
+                <span class="badge-pill badge-yes">ALWAYS INCLUDED</span>
+              </div>
+
+              <div class="layer-cards" id="layerSelectorGroup">
+                <input type="checkbox" value="annotations" checked disabled hidden />
+                <label class="layer-card active">
+                  <input type="checkbox" value="provenance" checked />
+                  <div class="layer-card-title">+ Study, Effort &amp; Procedure</div>
+                  <div class="layer-card-meta"><code>procedures</code> · <code>analyses</code> · <code>effort</code> (<code>DCLDE_2013</code>)</div>
+                </label>
+                <label class="layer-card active">
+                  <input type="checkbox" value="makara" checked />
+                  <div class="layer-card-title">+ Makara Deployment &amp; Site</div>
+                  <div class="layer-card-meta"><code>deployments</code> · <code>recordings</code> · lat/lon, depth, platform</div>
+                </label>
+                <label class="layer-card active">
+                  <input type="checkbox" value="audio" checked />
+                  <div class="layer-card-title">+ Cloud Audio &amp; Segments</div>
+                  <div class="layer-card-meta"><code>acoustic_files</code> · <code>audio_segments</code> · <code>gs://</code> &amp; byte offsets</div>
+                </label>
+                <label class="layer-card">
+                  <input type="checkbox" value="reconcile" />
+                  <div class="layer-card-title">+ Reconciliation Health</div>
+                  <div class="layer-card-meta"><code>reconcile.recording_status</code> · crawler audit state</div>
+                </label>
+              </div>
+            </div>
+          </details>
+
+          <!-- Collapsible Subsection 2: Structured Filter Refinements (Default Hidden) -->
+          <details class="structured-filters collapsible-subpanel" id="filtersDetailsPanel">
+            <summary class="subpanel-summary">
+              <span class="subpanel-summary-title">Structured Filter Refinements</span>
+              <span class="subpanel-summary-meta" id="filtersSummaryBadge">Effort: DCLDE_2013 · Click to expand</span>
+            </summary>
+            <div class="subpanel-content">
+              <p class="muted-sm" style="margin-bottom:10px;">Constrain effort samples, organizations, call types, granularity (hover options for definitions), verification labels, or frequency bounds.</p>
+              <div class="filters-grid">
+                <div class="field">
+                  <label for="filterEffort">Effort Sample</label>
+                  <select id="filterEffort">
+                    <option value="">All Efforts / Unfiltered</option>
+                    <option value="DCLDE_2013" selected>DCLDE_2013 (NEFSC Right Whale)</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="filterOrg">Organization</label>
+                  <select id="filterOrg">
+                    <option value="">All Organizations</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="filterCallType">Call Type</label>
+                  <select id="filterCallType">
+                    <option value="">All Call Types</option>
+                  </select>
+                </div>
+                <div class="field custom-select-field" id="granularityFieldWrap">
+                  <label id="filterGranularityLabel">Granularity Code <span class="hint-tag" title="Hover over any option in the menu to view its definition">hover options</span></label>
+                  <input type="hidden" id="filterGranularity" value="" />
+                  <button type="button" class="custom-select-trigger" id="granularityTriggerBtn" aria-haspopup="listbox" aria-expanded="false">
+                    <span id="granularitySelectedText">All Granularities</span>
+                    <span class="chevron">▾</span>
+                  </button>
+                  <div class="custom-select-menu" id="granularityMenu" role="listbox" hidden></div>
+                  <div class="granularity-hover-tooltip" id="granularityHoverTooltip" hidden></div>
+                </div>
+                <div class="field">
+                  <label for="filterLabel">Verification Label</label>
+                  <select id="filterLabel">
+                    <option value="">All Labels</option>
+                    <option value="YES">YES · Verified Positive</option>
+                    <option value="MAYBE">MAYBE · Uncertain</option>
+                    <option value="NO">NO · Verified Negative</option>
+                    <option value="UNVERIFIED">UNVERIFIED · Candidate</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="filterFreqMin">Min Freq (Hz)</label>
+                  <input type="number" id="filterFreqMin" placeholder="e.g. 40" min="0" step="10" />
+                </div>
+                <div class="field">
+                  <label for="filterFreqMax">Max Freq (Hz)</label>
+                  <input type="number" id="filterFreqMax" placeholder="e.g. 300" min="0" step="10" />
+                </div>
+                <div class="field">
+                  <label for="filterLimit">Max Rows</label>
+                  <select id="filterLimit">
+                    <option value="250">250 rows</option>
+                    <option value="500" selected>500 rows</option>
+                    <option value="1500">1,500 rows</option>
+                    <option value="5000">5,000 rows</option>
+                  </select>
+                </div>
+                <div class="field checkbox-field">
+                  <label class="inline-check">
+                    <input type="checkbox" id="filterRandomSample" />
+                    <span>Randomize SQL Sample</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <!-- Below Prompt Card: Copy-Ready PostgreSQL Query Studio (Collapsible) -->
+        <div class="panel-card sql-studio-card">
+          <div class="card-header" style="margin-bottom:0;">
+            <div>
+              <span class="eyebrow-badge">GENERATED POSTGRESQL + POSTGIS QUERY</span>
+              <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                <h3>Copy-Ready SQL Query</h3>
+                <span class="sql-sync-pill" id="sqlSyncStatusBadge">⟳ Auto-updates live as filters change · Click "Run SQL Query ▶" to refresh table</span>
+              </div>
+            </div>
+            <div class="sql-toolbar">
+              <button class="btn-subtle" id="toggleSqlBodyBtn" type="button">Hide SQL</button>
+              <button class="btn-subtle" id="copySqlBtn" type="button">Copy SQL</button>
+              <button class="btn-primary-sm" id="runCustomSqlBtn" type="button">Run SQL Query ▶</button>
+            </div>
+          </div>
+
+          <div id="sqlCollapsibleBody" style="margin-top:14px;">
+            <div class="sql-explanation-bar" id="sqlExplanationBar">
+              Ready to generate GiST-indexed PostgreSQL using <code>tstzrange &amp;&amp;</code> temporal overlap joins.
+            </div>
+
+            <div class="sql-editor-wrap">
+              <textarea id="sqlEditorTextarea" spellcheck="false" aria-label="Generated SQL Query"></textarea>
+            </div>
+
+            <div class="sql-footer-tips">
+              <span>Changing any prompt, metadata scope, or filter selection above <strong>automatically updates this SQL query</strong>. You can also edit the SQL manually and click <strong>Run SQL Query ▶</strong>.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Post-Query Decision Prompt + Interactive Results Preview -->
+      <div class="results-section" id="queryResultsSection" hidden>
+        <!-- Explicit User Decision Card: Download CSV and/or Review in Marimo -->
+        <div class="decision-banner" id="postQueryDecisionBanner">
+          <div class="decision-copy">
+            <span class="eyebrow-badge">DATASET READY</span>
+            <h3 id="decisionHeadline">Your acoustic annotation dataset is ready.</h3>
+            <p id="decisionSubtext">Would you like to download the CSV file directly, open this dataset in the interactive Marimo Review Studio, or enrich it for export?</p>
+          </div>
+          <div class="decision-actions">
+            <a class="btn-emerald" id="downloadQueryCsvBtn" href="/api/query/download-csv">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download CSV File
+            </a>
+            <button class="btn-primary" id="sendToMarimoBtn" type="button">
+              Review in Marimo Notebook →
+            </button>
+            <button class="btn-subtle" id="sendToExportBtn" type="button">
+              Configure Custom Export
+            </button>
+          </div>
+        </div>
+
+        <!-- KPI Strip -->
+        <div class="kpi-grid" id="queryKpiGrid"></div>
+
+        <!-- Results Preview Table -->
+        <div class="panel-card table-card">
+          <div class="card-header">
+            <div>
+              <h3>Matched Annotations Preview</h3>
+              <p class="muted-sm">Click <strong>Inspect Call</strong> on any row to render its live spectrogram &amp; audio waveform.</p>
+            </div>
+            <div class="table-meta-badge" id="previewTableCountBadge">0 rows</div>
+          </div>
+          <div class="data-table-scroll">
+            <table class="data-table" id="queryResultsTable">
+              <thead></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- MODULE 02: REVIEW DATA (MARIMO NOTEBOOK + SPECTROGRAM STUDIO)      -->
+    <!-- ================================================================== -->
+    <section class="tab-panel" id="panel-review" role="tabpanel" hidden>
+      <div class="review-header-card">
+        <div class="review-header-left">
+          <span class="eyebrow-badge">REACTIVE MARIMO NOTEBOOK STUDIO</span>
+          <h2>Review, Subset &amp; Explore Bioacoustic Data in Marimo</h2>
+          <p>
+            Your active dataset is imported directly into a reactive <strong>Marimo notebook</strong> featuring reproducible random/stratified subsetting,
+            diel &amp; time-frequency visualizations, an embedded spectrogram + audio viewer linked to <code>gs://</code>, and a conversational data chatbot.
+          </p>
+          <div class="review-instructions-row">
+            <span class="step-tag"><strong>1.</strong> Stage active query or <code>DCLDE_2013</code></span>
+            <span class="step-tag"><strong>2.</strong> Subset large catalogs with random seed</span>
+            <span class="step-tag"><strong>3.</strong> Tune NFFT / overlap on call spectrograms</span>
+            <span class="step-tag"><strong>4.</strong> Chat with data &amp; save subset for export</span>
+            <a href="/guide?section=review" target="_blank" class="link-accent">Marimo Review Guide ↗</a>
+          </div>
+        </div>
+        <div class="review-header-actions">
+          <button class="btn-primary" id="launchMarimoStudioBtn" type="button">
+            Stage Dataset &amp; Launch Marimo Studio
+          </button>
+          <a class="btn-subtle" id="openMarimoNewTabLink" href="http://127.0.0.1:2718" target="_blank" rel="noopener">
+            Open Notebook in Full Browser Tab ↗
+          </a>
+        </div>
+      </div>
+
+      <div class="marimo-frame-shell" id="marimoFrameShell">
+        <div class="marimo-placeholder" id="marimoPlaceholder">
+          <div class="placeholder-icon">
+            <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="1.6"><path d="M2 12h3l3-9 4 18 3-9h7"/></svg>
+          </div>
+          <h3>Launch Reactive Marimo Review Notebook</h3>
+          <p>Click <strong>Stage Dataset &amp; Launch Marimo Studio</strong> above to start the local Marimo server with your active annotation dataset pre-loaded.</p>
+          <button class="btn-primary" id="launchMarimoCenterBtn" type="button">Start Marimo Review Notebook</button>
+        </div>
+        <iframe id="marimoIframe" title="Annomate Marimo Review Studio" hidden></iframe>
+      </div>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- MODULE 03: EXPORT DATA                                             -->
+    <!-- ================================================================== -->
+    <section class="tab-panel" id="panel-export" role="tabpanel" hidden>
+      <div class="export-grid">
+        <div class="panel-card">
+          <div class="card-header">
+            <div>
+              <span class="eyebrow-badge">DOWNSTREAM PACKAGING</span>
+              <h3>Select Dataset &amp; Relational Metadata to Export</h3>
+            </div>
+            <a href="/guide?section=export" target="_blank" class="link-accent">Export Guide ↗</a>
+          </div>
+
+          <div class="field">
+            <label>1. Choose Source Dataset</label>
+            <div class="source-radio-cards" id="exportSourceGroup">
+              <label class="radio-card active">
+                <input type="radio" name="exportSource" value="last_query" checked />
+                <div class="rc-title">Current Find &amp; Filter Results</div>
+                <div class="rc-sub" id="exportLastQueryMeta">Latest query executed in Find &amp; Filter</div>
+              </label>
+              <label class="radio-card">
+                <input type="radio" name="exportSource" value="marimo_reviewed" />
+                <div class="rc-title">Reviewed Subset from Marimo</div>
+                <div class="rc-sub" id="exportMarimoMeta">Subset saved from the Marimo Review Studio</div>
+              </label>
+              <label class="radio-card">
+                <input type="radio" name="exportSource" value="effort" />
+                <div class="rc-title">Full Effort Dataset from DB</div>
+                <div class="rc-sub">Export directly from <code>DCLDE_2013</code> or another effort</div>
+              </label>
+            </div>
+          </div>
+
+          <div class="field" id="exportEffortField" hidden>
+            <label for="exportEffortSelect">Effort Dataset Name</label>
+            <select id="exportEffortSelect">
+              <option value="DCLDE_2013">DCLDE_2013</option>
+            </select>
+          </div>
+
+          <div class="guaranteed-audio-box">
+            <div class="ga-icon">✓</div>
+            <div>
+              <strong>Cloud Audio Paths Always Included</strong>
+              <p>Every export automatically attaches <code>obj_gsuri</code> (<code>gs://...</code>), Makara <code>recording_uri</code>, container format, <code>subfile_index</code>, <code>file_channel</code>, <code>data_byte_offset</code>, and <code>call_offset_in_seg_secs</code>.</p>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>2. Enrich with Additional Relational Metadata</label>
+            <div class="check-list">
+              <label class="inline-check"><input type="checkbox" id="expEnrichDeployment" checked /> <span><strong>Makara Deployment Metadata</strong> (site code, lat/lon, water depth, platform, vessel/cruise)</span></label>
+              <label class="inline-check"><input type="checkbox" id="expEnrichRecording" checked /> <span><strong>Makara Recording Attributes</strong> (sample rate, usable frequency bounds, calibration URI)</span></label>
+              <label class="inline-check"><input type="checkbox" id="expEnrichTaxonomy" checked /> <span><strong>Species &amp; Call Taxonomy</strong> (common name, scientific name, ITIS TSN, WoRMS AphiaID)</span></label>
+              <label class="inline-check"><input type="checkbox" id="expEnrichProvenance" checked /> <span><strong>Study &amp; Procedure Provenance</strong> (analysis code, procedure name, protocol URL)</span></label>
+              <label class="inline-check"><input type="checkbox" id="expEnrichReconcile" /> <span><strong>Reconciliation Audit Status</strong> (<code>reconcile.recording_status</code> consistency state)</span></label>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="exportRowLimit">Maximum Rows to Export</label>
+            <select id="exportRowLimit">
+              <option value="500">500 rows</option>
+              <option value="2000">2,000 rows</option>
+              <option value="5000" selected>5,000 rows</option>
+              <option value="10000">10,000 rows</option>
+            </select>
+          </div>
+
+          <button class="btn-subtle full-w" id="refreshExportPreviewBtn" type="button">Refresh Export Schema &amp; Preview</button>
+        </div>
+
+        <div class="panel-card">
+          <div class="card-header">
+            <div>
+              <span class="eyebrow-badge">EXPORT FORMATS &amp; MANIFEST PREVIEW</span>
+              <h3>Download Standardized Package</h3>
+            </div>
+          </div>
+
+          <div class="export-format-cards">
+            <button class="export-dl-card" type="button" data-format="csv">
+              <span class="fmt-tag">CSV</span>
+              <strong>Enriched Relational CSV</strong>
+              <span>Universal tabular dataset with UTC bounds, metadata &amp; <code>gs://</code> paths</span>
+            </button>
+            <button class="export-dl-card" type="button" data-format="raven_tsv">
+              <span class="fmt-tag">RAVEN .TXT</span>
+              <strong>Raven Pro Selection Table</strong>
+              <span>Tab-delimited selection table with segment offsets &amp; Hz bounds</span>
+            </button>
+            <button class="export-dl-card" type="button" data-format="jsonl">
+              <span class="fmt-tag">JSONL</span>
+              <strong>ML Training Manifest</strong>
+              <span>Line-delimited JSON records ready for PyTorch / bioacoustics pipelines</span>
+            </button>
+            <button class="export-dl-card" type="button" data-format="gcloud_script">
+              <span class="fmt-tag">GCLOUD .PS1</span>
+              <strong>Cloud Audio Fetch Script</strong>
+              <span>Batch <code>gcloud storage cp</code> script for all referenced <code>gs://</code> containers</span>
+            </button>
+          </div>
+
+          <div class="export-summary-box" id="exportSummaryBox">
+            Loading export preview…
+          </div>
+
+          <div class="data-table-scroll compact-scroll">
+            <table class="data-table" id="exportPreviewTable">
+              <thead></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- MODULE 04: ADD & ALIGN ANNOTATIONS                                 -->
+    <!-- ================================================================== -->
+    <section class="tab-panel" id="panel-align" role="tabpanel" hidden>
+      <div class="align-stepper-header">
+        <div>
+          <span class="eyebrow-badge">STANDARDIZED ANNOTATION INGESTION</span>
+          <h2>Align Heterogeneous Detections to <code>core.annotations</code></h2>
+          <p class="muted-sm">Convert Raven Pro selection tables, Triton Logger spreadsheets, PAMGuard detections, or custom CSVs into validated <code>nmfs_annotation_db</code> records.</p>
+        </div>
+        <div class="sample-loader-bar">
+          <a href="/guide?section=align" target="_blank" class="link-accent" style="margin-right:8px;">Alignment Guide ↗</a>
+          <span class="chips-label">Test instantly with sample data:</span>
+          <button class="btn-xs" type="button" data-sample="raven_pro">Load Raven Pro (.txt)</button>
+          <button class="btn-xs" type="button" data-sample="triton_logger">Load Triton Logger (.csv)</button>
+          <button class="btn-xs" type="button" data-sample="pamguard">Load PAMGuard (.csv)</button>
+        </div>
+      </div>
+
+      <div class="align-grid">
+        <!-- Step 1 & 2: File Upload + Study/Channel Provenance -->
+        <div class="panel-card">
+          <div class="card-header">
+            <div>
+              <span class="eyebrow-badge">STEP 1 &amp; 2 · SOURCE FILE &amp; TARGET CONTEXT</span>
+              <h3>Upload Annotations &amp; Set Provenance</h3>
+            </div>
+          </div>
+
+          <label class="upload-dropzone" id="alignDropzone">
+            <input type="file" id="alignFileInput" accept=".txt,.tsv,.csv,.xls,.xlsx" hidden />
+            <div class="dz-icon">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            </div>
+            <div class="dz-title" id="alignDropzoneTitle">Drop Raven .txt, Triton .xlsx/.csv, PAMGuard, or CSV here</div>
+            <div class="dz-sub" id="alignDropzoneSub">Auto-detects delimiters, channel indexing, and timestamp conventions</div>
+          </label>
+
+          <div class="filters-grid" style="margin-top:16px;">
+            <div class="field">
+              <label for="alignPresetSelect">Detected Format Profile</label>
+              <select id="alignPresetSelect">
+                <option value="raven_pro">Raven Pro Selection Table (.txt / TSV)</option>
+                <option value="triton_logger">Triton Logger / Remora (.xls / .csv)</option>
+                <option value="pamguard">PAMGuard Detection Export (.csv)</option>
+                <option value="custom_csv">Generic CSV / Excel Table</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="alignOrgSelect">Organization Code (Required)</label>
+              <select id="alignOrgSelect"></select>
+            </div>
+            <div class="field">
+              <label for="alignRecordingChannelSelect">Target Recording Channel</label>
+              <select id="alignRecordingChannelSelect"></select>
+            </div>
+            <div class="field">
+              <label for="alignProcedureSelect">Study Procedure (<code>core.procedures</code>)</label>
+              <select id="alignProcedureSelect"></select>
+            </div>
+          </div>
+
+          <!-- Optional Create New Procedure Sub-panel -->
+          <details class="new-proc-details" id="newProcedureDetails">
+            <summary>+ Or Create a New Procedure under an Existing Analysis</summary>
+            <div class="filters-grid" style="margin-top:10px;">
+              <div class="field">
+                <label for="newProcAnalysisSelect">Parent Analysis (<code>core.analyses</code>)</label>
+                <select id="newProcAnalysisSelect"></select>
+              </div>
+              <div class="field">
+                <label for="newProcName">New Procedure Name</label>
+                <input type="text" id="newProcName" placeholder="e.g. srankin_manual_verification_v1" />
+              </div>
+              <div class="field" style="grid-column: 1 / -1;">
+                <label for="newProcDesc">Procedure Protocol / Description</label>
+                <input type="text" id="newProcDesc" placeholder="Analyst review protocol, detector version, or passband notes" />
+              </div>
+            </div>
+          </details>
+
+          <div class="filters-grid" style="margin-top:14px;">
+            <div class="field">
+              <label for="alignDefaultCallType">Default Call Type Code</label>
+              <select id="alignDefaultCallType"></select>
+            </div>
+            <div class="field">
+              <label for="alignDefaultLabel">Default Verification Label</label>
+              <select id="alignDefaultLabel">
+                <option value="YES">YES · Verified Positive</option>
+                <option value="UNVERIFIED">UNVERIFIED · Candidate</option>
+                <option value="MAYBE">MAYBE · Uncertain</option>
+                <option value="NO">NO · Verified Negative</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="alignDefaultGranularity">Granularity Code</label>
+              <select id="alignDefaultGranularity"></select>
+            </div>
+            <div class="field">
+              <label for="alignDefaultSharing">Sharing Scope</label>
+              <select id="alignDefaultSharing"></select>
+            </div>
+            <div class="field">
+              <label for="alignDefaultAnalyst">Default Analyst (<code>FIRSTINITIAL+LAST</code>)</label>
+              <input type="text" id="alignDefaultAnalyst" value="SRANKIN" placeholder="SRANKIN" />
+            </div>
+            <div class="field">
+              <label for="alignAnchorUtc">Fallback File Start UTC (if relative sec)</label>
+              <input type="text" id="alignAnchorUtc" placeholder="e.g. 2009-03-28T05:00:00Z" />
+            </div>
+          </div>
+
+          <div class="unit-toggles-row">
+            <label class="inline-check"><input type="checkbox" id="alignOneBasedCh" checked /> <span>Source channels are 1-based (Raven/Triton) → convert to 0-based DB index</span></label>
+            <label class="inline-check"><input type="checkbox" id="alignFreqKhz" /> <span>Source frequencies are in kHz → multiply by 1,000 to Hz</span></label>
+          </div>
+        </div>
+
+        <!-- Step 3: Interactive Column Alignment Mapper -->
+        <div class="panel-card">
+          <div class="card-header">
+            <div>
+              <span class="eyebrow-badge">STEP 3 · SCHEMA &amp; VOCABULARY ALIGNMENT</span>
+              <h3>Map Source Columns to Standardized Expectations</h3>
+            </div>
+            <button class="btn-primary-sm" id="runAlignValidationBtn" type="button">Align &amp; Validate Rows ▶</button>
+          </div>
+
+          <div class="mapper-scroll" id="columnMapperContainer">
+            <div class="empty-hint">Upload an annotation file or load one of the sample files above to configure column mappings.</div>
+          </div>
+
+          <details class="structured-filters" style="margin-top:12px;">
+            <summary>Custom Call Type / Label Synonym Overrides (Optional)</summary>
+            <div class="filters-grid" style="margin-top:8px;">
+              <div class="field">
+                <label for="vocabCallOverrides">Call Type Map (<code>source=DB_CODE</code>, comma-separated)</label>
+                <input type="text" id="vocabCallOverrides" placeholder="e.g. Upcall=RW_UPCALL, Gunshot=OD_CLICK_IMP" />
+              </div>
+              <div class="field">
+                <label for="vocabLabelOverrides">Label Map (<code>source=YES/NO/MAYBE</code>)</label>
+                <input type="text" id="vocabLabelOverrides" placeholder="e.g. Pos=YES, Distant=MAYBE, Noise=NO" />
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Step 4: Validation Report & Database Commit -->
+      <div class="panel-card" id="alignValidationPanel" hidden style="margin-top:20px;">
+        <div class="card-header">
+          <div>
+            <span class="eyebrow-badge">STEP 4 · PRE-FLIGHT VALIDATION &amp; DATABASE INGESTION</span>
+            <h3 id="alignReportTitle">Standardized Alignment Report</h3>
+          </div>
+          <div class="decision-actions">
+            <button class="btn-subtle" id="downloadAlignedCsvBtn" type="button">Download Standardized CSV</button>
+            <button class="btn-emerald" id="commitAlignedDbBtn" type="button">Commit Validated Rows to nmfs_annotation_db</button>
+          </div>
+        </div>
+
+        <div id="alignIssuesBanner"></div>
+
+        <div class="data-table-scroll compact-scroll">
+          <table class="data-table" id="alignPreviewTable">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==================================================================== -->
+  <!-- SLIDE-OVER SPECTROGRAM & CLOUD AUDIO INSPECTOR DRAWER                -->
+  <!-- ==================================================================== -->
+  <aside class="drawer-backdrop" id="spectrogramDrawer" hidden>
+    <div class="drawer-panel drawer-wide">
+      <div class="drawer-header">
+        <div>
+          <span class="eyebrow-badge">EMBEDDED CALL SPECTROGRAM &amp; CLOUD AUDIO</span>
+          <h3 id="specDrawerTitle">Annotation Call Inspector</h3>
+        </div>
+        <button class="icon-btn" id="closeSpecDrawerBtn" type="button" aria-label="Close spectrogram drawer">✕</button>
+      </div>
+
+      <div class="spec-meta-bar" id="specMetaBar"></div>
+
+      <!-- Interactive Spectrogram Parameters -->
+      <div class="spec-controls-bar">
+        <div class="field-compact">
+          <label for="specNfft">NFFT</label>
+          <select id="specNfft">
+            <option value="128">128</option>
+            <option value="256" selected>256</option>
+            <option value="512">512</option>
+            <option value="1024">1024</option>
+          </select>
+        </div>
+        <div class="field-compact">
+          <label for="specOverlap">Overlap %</label>
+          <select id="specOverlap">
+            <option value="50">50%</option>
+            <option value="75">75%</option>
+            <option value="85" selected>85%</option>
+            <option value="92">92%</option>
+          </select>
+        </div>
+        <div class="field-compact">
+          <label for="specWindow">Window</label>
+          <select id="specWindow">
+            <option value="hann" selected>Hann</option>
+            <option value="hamming">Hamming</option>
+            <option value="blackman">Blackman</option>
+            <option value="kaiser">Kaiser</option>
+          </select>
+        </div>
+        <div class="field-compact">
+          <label for="specPadding">Padding (±s)</label>
+          <select id="specPadding">
+            <option value="1.0">±1.0s</option>
+            <option value="2.5" selected>±2.5s</option>
+            <option value="5.0">±5.0s</option>
+            <option value="8.0">±8.0s</option>
+          </select>
+        </div>
+        <div class="field-compact">
+          <label for="specFmax">Max Hz</label>
+          <input type="number" id="specFmax" value="450" min="50" max="96000" step="50" />
+        </div>
+        <div class="field-compact">
+          <label for="specDbRange">Dyn Range (dB)</label>
+          <input type="number" id="specDbRange" value="55" min="25" max="90" step="5" />
+        </div>
+        <div class="field-compact">
+          <label for="specColormap">Colormap</label>
+          <select id="specColormap">
+            <option value="Magma" selected>Magma</option>
+            <option value="Viridis">Viridis</option>
+            <option value="Cividis">Cividis</option>
+            <option value="Inferno">Inferno</option>
+            <option value="YlGnBu">Oceanic</option>
+          </select>
+        </div>
+        <button class="btn-primary-sm" id="recomputeSpecBtn" type="button">Update</button>
+      </div>
+
+      <div class="spec-audio-strip">
+        <div id="specSourceBadgeWrap"></div>
+        <audio id="specAudioPlayer" controls></audio>
+      </div>
+
+      <div id="specPlotContainer" class="spec-plot-box"></div>
+    </div>
+  </aside>
+
+  <!-- ==================================================================== -->
+  <!-- SETTINGS & CLOUD AUTH MODAL                                          -->
+  <!-- ==================================================================== -->
+  <aside class="drawer-backdrop" id="settingsModal" hidden>
+    <div class="modal-card">
+      <div class="drawer-header">
+        <div>
+          <span class="eyebrow-badge">PLATFORM CONFIGURATION</span>
+          <h3>AI, Cloud Audio &amp; Database Settings</h3>
+        </div>
+        <button class="icon-btn" id="closeSettingsBtn" type="button">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="settingsGeminiKey">Gemini API Key (Optional — enables Multimodal Audio-to-SQL &amp; Open-Ended Marimo Chat)</label>
+          <input type="password" id="settingsGeminiKey" placeholder="AIzaSy... (leave blank to use built-in Schema Parser & Browser Speech)" />
+        </div>
+        <div class="field" style="margin-top:12px;">
+          <label for="settingsGcpProject">Google Cloud Project ID (Optional — for GCS billing/ADC)</label>
+          <input type="text" id="settingsGcpProject" placeholder="e.g. noaa-nmfs-pam" />
+        </div>
+        <div class="auth-tip-box">
+          <strong>Streaming Live Private GCS Audio (<code>gs://nefsc-1/...</code>):</strong>
+          <p>Run <code>gcloud auth login</code> or <code>gcloud auth application-default login</code> in your terminal with your NOAA Google account, then click Save &amp; Refresh below.</p>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-subtle" id="cancelSettingsBtn" type="button">Cancel</button>
+          <button class="btn-primary" id="saveSettingsBtn" type="button">Save &amp; Refresh Connections</button>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

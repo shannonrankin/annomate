@@ -1,0 +1,10 @@
+[project]
+name = "annomate"
+version = "1.0.0"
+description = "NOAA NMFS Bioacoustic Annotation Discovery, Cloud Audio Linkage, Review & Standardization Platform"
+requires-python = ">=3.10"
+
+[tool.marimo.display]
+theme = "dark"
+cell_output = "below"
+default_width = "full"

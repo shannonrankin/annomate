@@ -1,0 +1,29 @@
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Secrets & local configuration
+.env
+.env.local
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Marimo session cache
+__marimo__/
+
+# Local runtime exports / temp audio cache
+data/cache/
+data/exports/
+data/uploads/
+data/review_session/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/

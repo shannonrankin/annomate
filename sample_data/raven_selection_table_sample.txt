@@ -1,0 +1,6 @@
+Selection	View	Channel	Begin Time (s)	End Time (s)	Low Freq (Hz)	High Freq (Hz)	Begin File	Call Type	Verified	Confidence	Analyst	Notes
+1	Spectrogram 1	2	188.812	190.586	42.5	208.6	NOPP6_EST_20090328_000000.aif	RW_UPCALL	YES	0.96	SRANKIN	Clear right whale contact upcall
+2	Spectrogram 1	2	235.756	237.160	77.5	216.6	NOPP6_EST_20090328_000000.aif	RW_UPCALL	YES	0.93	SRANKIN	Strong FM sweep
+3	Spectrogram 1	2	398.692	400.171	45.7	208.6	NOPP6_EST_20090328_000000.aif	RW_UPCALL	MAYBE	0.62	SRANKIN	Faint call in ambient noise
+4	Spectrogram 1	2	438.909	440.314	61.6	240.4	NOPP6_EST_20090328_000000.aif	RW_UPCALL	YES	0.98	SRANKIN	High SNR focal animal
+5	Spectrogram 1	2	451.052	452.272	37.7	216.6	NOPP6_EST_20090328_000000.aif	RW_UPCALL	NO	0.88	SRANKIN	Humpback upsweep false positive
